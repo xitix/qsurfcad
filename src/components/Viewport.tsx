@@ -26,6 +26,7 @@ export function Viewport({
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const meshGroupRef = useRef<THREE.Group | null>(null);
   const overlayGroupRef = useRef<THREE.Group | null>(null);
+  const axisGroupRef = useRef<THREE.Group | null>(null);
   const yawRef = useRef(-0.65);
   const pitchRef = useRef(0.45);
   const zoomRef = useRef(1);
@@ -52,6 +53,9 @@ export function Viewport({
     }
     if (overlayGroupRef.current) {
       sceneRef.current.remove(overlayGroupRef.current);
+    }
+    if (axisGroupRef.current) {
+      sceneRef.current.remove(axisGroupRef.current);
     }
 
     const group = new THREE.Group();
@@ -128,6 +132,93 @@ export function Viewport({
 
     sceneRef.current.add(group);
     meshGroupRef.current = group;
+
+    // Add world axes (fixed, not transformed)
+    const axisLength = Math.max(preview.bounds[0], preview.bounds[1], preview.bounds[2]) * 0.6;
+    const axisGroup = new THREE.Group();
+    
+    // X axis (red)
+    const xAxisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(axisLength, 0, 0),
+    ]);
+    const xAxisMat = new THREE.LineBasicMaterial({ color: 0xff4444, linewidth: 2 });
+    axisGroup.add(new THREE.Line(xAxisGeo, xAxisMat));
+    
+    // X arrow head
+    const xArrowGeo = new THREE.ConeGeometry(axisLength * 0.03, axisLength * 0.08, 8);
+    const xArrowMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+    const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
+    xArrow.position.set(axisLength, 0, 0);
+    xArrow.rotation.z = -Math.PI / 2;
+    axisGroup.add(xArrow);
+    
+    // Y axis (green)
+    const yAxisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, axisLength, 0),
+    ]);
+    const yAxisMat = new THREE.LineBasicMaterial({ color: 0x44ff44, linewidth: 2 });
+    axisGroup.add(new THREE.Line(yAxisGeo, yAxisMat));
+    
+    // Y arrow head
+    const yArrowGeo = new THREE.ConeGeometry(axisLength * 0.03, axisLength * 0.08, 8);
+    const yArrowMat = new THREE.MeshBasicMaterial({ color: 0x44ff44 });
+    const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
+    yArrow.position.set(0, axisLength, 0);
+    axisGroup.add(yArrow);
+    
+    // Z axis (blue)
+    const zAxisGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, axisLength),
+    ]);
+    const zAxisMat = new THREE.LineBasicMaterial({ color: 0x4444ff, linewidth: 2 });
+    axisGroup.add(new THREE.Line(zAxisGeo, zAxisMat));
+    
+    // Z arrow head
+    const zArrowGeo = new THREE.ConeGeometry(axisLength * 0.03, axisLength * 0.08, 8);
+    const zArrowMat = new THREE.MeshBasicMaterial({ color: 0x4444ff });
+    const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
+    zArrow.position.set(0, 0, axisLength);
+    zArrow.rotation.x = Math.PI / 2;
+    axisGroup.add(zArrow);
+    
+    // Origin marker (yellow sphere)
+    const originGeo = new THREE.SphereGeometry(axisLength * 0.04, 16, 16);
+    const originMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const originMarker = new THREE.Mesh(originGeo, originMat);
+    originMarker.position.set(0, 0, 0);
+    axisGroup.add(originMarker);
+    
+    // Center point marker (cyan sphere)
+    const centerGeo = new THREE.SphereGeometry(axisLength * 0.03, 16, 16);
+    const centerMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 });
+    const centerMarker = new THREE.Mesh(centerGeo, centerMat);
+    centerMarker.position.set(preview.center[0], preview.center[1], preview.center[2]);
+    axisGroup.add(centerMarker);
+    
+    // Center cross-hair lines
+    const crossSize = axisLength * 0.08;
+    const crossGeo1 = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(preview.center[0] - crossSize, preview.center[1], preview.center[2]),
+      new THREE.Vector3(preview.center[0] + crossSize, preview.center[1], preview.center[2]),
+    ]);
+    const crossGeo2 = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(preview.center[0], preview.center[1] - crossSize, preview.center[2]),
+      new THREE.Vector3(preview.center[0], preview.center[1] + crossSize, preview.center[2]),
+    ]);
+    const crossGeo3 = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(preview.center[0], preview.center[1], preview.center[2] - crossSize),
+      new THREE.Vector3(preview.center[0], preview.center[1], preview.center[2] + crossSize),
+    ]);
+    const crossMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 });
+    axisGroup.add(new THREE.Line(crossGeo1, crossMat));
+    axisGroup.add(new THREE.Line(crossGeo2, crossMat));
+    axisGroup.add(new THREE.Line(crossGeo3, crossMat));
+    
+    sceneRef.current.add(axisGroup);
+    axisGroupRef.current = axisGroup;
 
     // Build sketch overlay
     buildSketchOverlay();
@@ -509,24 +600,44 @@ export function Viewport({
             className={`min-h-5 py-0.5 px-1 border rounded-sm text-[7px] font-bold cursor-pointer ${cameraView === 'right' ? 'border-[#80bdf0] text-white bg-[#286da9]' : 'border-[#56636d] text-[#d7dfe3] bg-[#35414a] hover:border-[#83b9e8] hover:text-white'}`}>RIGHT</button>
         </div>
 
-        {/* Dimensions */}
-        {hasMesh && preview && (
-          <div className="absolute bottom-3 left-3 p-2 border border-[#44515a] rounded-sm bg-[#22282dd9] text-[9px]">
-            <div className="text-[#aab4ba] font-bold tracking-[.8px] mb-1">DIMENSIONS ({unitLabel})</div>
-            <div className="grid grid-cols-3 gap-2">
-              <div><span className="text-[#56a4ff]">X</span> <span className="text-[#dae0e3]">{(preview.bounds[0] * run.orientation.scale).toFixed(2)}</span></div>
-              <div><span className="text-[#6f9db1]">Y</span> <span className="text-[#dae0e3]">{(preview.bounds[1] * run.orientation.scale).toFixed(2)}</span></div>
-              <div><span className="text-[#67c38c]">Z</span> <span className="text-[#dae0e3]">{(preview.bounds[2] * run.orientation.scale).toFixed(2)}</span></div>
-            </div>
-          </div>
-        )}
-
         {/* Edge legend */}
         {hasMesh && preview?.boundaryEdges && preview.boundaryEdges.length > 0 && (
           <div className="absolute bottom-3 right-3 p-2 border border-[#44515a] rounded-sm bg-[#22282dd9] text-[9px]">
             <div className="flex items-center gap-1.5">
               <span className="w-4 h-0.5 bg-[#ffaa00]" />
               <span className="text-[#aab4ba]">Detected edges ({preview.boundaryEdges.length})</span>
+            </div>
+          </div>
+        )}
+
+        {/* Axis legend */}
+        {hasMesh && preview && (
+          <div className="absolute bottom-3 left-3 p-2 border border-[#44515a] rounded-sm bg-[#22282dd9] text-[9px]">
+            <div className="text-[#aab4ba] font-bold tracking-[.8px] mb-1">COORDINATE SYSTEM ({unitLabel})</div>
+            <div className="grid gap-1">
+              <div className="flex items-center gap-1.5">
+                <span className="w-4 h-0.5 bg-[#ff4444]" />
+                <span className="text-[#ff4444] font-bold">X</span>
+                <span className="text-[#dae0e3]">{(preview.bounds[0] * run.orientation.scale).toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-4 h-0.5 bg-[#44ff44]" />
+                <span className="text-[#44ff44] font-bold">Y</span>
+                <span className="text-[#dae0e3]">{(preview.bounds[1] * run.orientation.scale).toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-4 h-0.5 bg-[#4444ff]" />
+                <span className="text-[#4444ff] font-bold">Z</span>
+                <span className="text-[#dae0e3]">{(preview.bounds[2] * run.orientation.scale).toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-[#44515a]">
+                <span className="w-2 h-2 rounded-full bg-[#ffff00]" />
+                <span className="text-[#aab4ba]">Origin (0,0,0)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#00ffff]" />
+                <span className="text-[#aab4ba]">Center point</span>
+              </div>
             </div>
           </div>
         )}
