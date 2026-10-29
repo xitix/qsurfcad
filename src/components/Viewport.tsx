@@ -1,7 +1,8 @@
 import { useRef, useEffect, useCallback } from 'react';
 import * as THREE from 'three';
-import { MeshPreview, RunManifest, Stage, CameraView } from '../types';
+import { MeshPreview, RunManifest, Stage, CameraView, DrawTool, SketchElement, SketchPlane, Point2D } from '../types';
 import { FLAT_FACE_COLORS } from '../cadTools';
+import { projectToPlane, unprojectFromPlane, distanceToPlane, sampleElement } from '../utils/sketchGeometry';
 
 interface ViewportProps {
   preview: MeshPreview | null;
@@ -10,31 +11,35 @@ interface ViewportProps {
   onCameraViewChange: (view: CameraView) => void;
   stage: Stage;
   flatFaceIndex: number;
+  drawTool: DrawTool;
+  activeSketchId: string | null;
+  onAddSketchElement: (element: SketchElement) => void;
 }
 
 export function Viewport({
-  preview,
-  run,
-  cameraView,
-  onCameraViewChange,
-  stage,
-  flatFaceIndex,
+  preview, run, cameraView, onCameraViewChange, stage, flatFaceIndex,
+  drawTool, activeSketchId, onAddSketchElement,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const meshGroupRef = useRef<THREE.Group | null>(null);
+  const overlayGroupRef = useRef<THREE.Group | null>(null);
   const yawRef = useRef(-0.65);
   const pitchRef = useRef(0.45);
   const zoomRef = useRef(1);
   const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
   const animFrameRef = useRef<number>(0);
-  const dimsRef = useRef<THREE.Group | null>(null);
+  const drawPointsRef = useRef<Point2D[]>([]);
+  const meshRef = useRef<THREE.Mesh | null>(null);
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const mouseRef = useRef(new THREE.Vector2());
 
-  const buildMesh = useCallback(() => {
+  const buildScene = useCallback(() => {
     if (!sceneRef.current || !preview) return;
 
+    // Clear existing
     if (meshGroupRef.current) {
       sceneRef.current.remove(meshGroupRef.current);
       meshGroupRef.current.traverse((child) => {
@@ -45,8 +50,8 @@ export function Viewport({
         }
       });
     }
-    if (dimsRef.current) {
-      sceneRef.current.remove(dimsRef.current);
+    if (overlayGroupRef.current) {
+      sceneRef.current.remove(overlayGroupRef.current);
     }
 
     const group = new THREE.Group();
@@ -104,57 +109,127 @@ export function Viewport({
       const material = new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 20 });
       const mesh = new THREE.Mesh(geometry, material);
       group.add(mesh);
+      meshRef.current = mesh;
 
-      const wireMaterial = new THREE.MeshBasicMaterial({ color: 0x445566, wireframe: true, transparent: true, opacity: 0.06 });
-      group.add(new THREE.Mesh(geometry.clone(), wireMaterial));
+      // Boundary edges overlay
+      if (preview.boundaryEdges && preview.boundaryEdges.length > 0) {
+        const edgeVertices: number[] = [];
+        preview.boundaryEdges.forEach(edge => {
+          edgeVertices.push(edge.a[0], edge.a[1], edge.a[2]);
+          edgeVertices.push(edge.b[0], edge.b[1], edge.b[2]);
+        });
+        const edgeGeo = new THREE.BufferGeometry();
+        edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edgeVertices, 3));
+        const edgeMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 1, transparent: true, opacity: 0.8 });
+        const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
+        group.add(edgeLines);
+      }
     }
 
     sceneRef.current.add(group);
     meshGroupRef.current = group;
 
-    // Dimension lines (bounding box)
-    if (stage >= 0 && preview) {
-      const dimGroup = new THREE.Group();
-      dimGroup.rotation.set(rotRad[0], rotRad[1], rotRad[2]);
-      dimGroup.scale.set(scale, scale, scale);
+    // Build sketch overlay
+    buildSketchOverlay();
+  }, [preview, run.orientation, stage, flatFaceIndex, run.sketches, run.sketchPlanes]);
 
-      const [bx, by, bz] = preview.bounds;
-      const [cx, cy, cz] = [0, 0, 0];
-      const offset = Math.max(bx, by, bz) * 0.15;
+  const buildSketchOverlay = useCallback(() => {
+    if (!sceneRef.current) return;
 
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x56a4ff, transparent: true, opacity: 0.6 });
-      
-      // X dimension line
-      const xLine = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-bx / 2, -by / 2 - offset, -bz / 2 - offset),
-        new THREE.Vector3(bx / 2, -by / 2 - offset, -bz / 2 - offset),
-      ]);
-      dimGroup.add(new THREE.Line(xLine, lineMat));
-
-      // Y dimension line
-      const yLine = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-bx / 2 - offset, -by / 2, -bz / 2 - offset),
-        new THREE.Vector3(-bx / 2 - offset, by / 2, -bz / 2 - offset),
-      ]);
-      dimGroup.add(new THREE.Line(yLine, lineMat.clone()));
-
-      // Z dimension line
-      const zLine = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-bx / 2 - offset, -by / 2 - offset, -bz / 2),
-        new THREE.Vector3(-bx / 2 - offset, -by / 2 - offset, bz / 2),
-      ]);
-      dimGroup.add(new THREE.Line(zLine, lineMat.clone()));
-
-      // Bounding box wireframe
-      const boxGeo = new THREE.BoxGeometry(bx, by, bz);
-      const boxEdges = new THREE.EdgesGeometry(boxGeo);
-      const boxLine = new THREE.LineSegments(boxEdges, new THREE.LineBasicMaterial({ color: 0x3a5570, transparent: true, opacity: 0.3 }));
-      dimGroup.add(boxLine);
-
-      sceneRef.current.add(dimGroup);
-      dimsRef.current = dimGroup;
+    if (overlayGroupRef.current) {
+      sceneRef.current.remove(overlayGroupRef.current);
+      overlayGroupRef.current.traverse((child) => {
+        if (child instanceof THREE.Line) {
+          child.geometry.dispose();
+          (child.material as THREE.Material).dispose();
+        }
+      });
     }
-  }, [preview, run.orientation, stage, flatFaceIndex]);
+
+    const overlayGroup = new THREE.Group();
+    const orientation = run.orientation;
+    const scale = orientation.scale;
+    const rotRad = orientation.rotation.map(v => v * Math.PI / 180) as [number, number, number];
+
+    overlayGroup.rotation.set(rotRad[0], rotRad[1], rotRad[2]);
+    overlayGroup.scale.set(scale, scale, scale);
+
+    const center = new THREE.Vector3(...(preview?.center || [0, 0, 0]));
+    overlayGroup.position.sub(center.multiplyScalar(scale));
+
+    // Draw each sketch
+    for (const sketch of run.sketches) {
+      const plane = run.sketchPlanes.find(p => p.id === sketch.planeId);
+      if (!plane) continue;
+
+      const isActive = sketch.id === activeSketchId;
+      const color = new THREE.Color(sketch.color);
+
+      for (const element of sketch.elements) {
+        const sampled = sampleElement(element, 32);
+        if (sampled.length < 2) continue;
+
+        const points3D = sampled.map(p2d => {
+          const p3d = unprojectFromPlane(plane, p2d);
+          return new THREE.Vector3(p3d[0], p3d[1], p3d[2]);
+        });
+
+        const geometry = new THREE.BufferGeometry().setFromPoints(points3D);
+        const material = new THREE.LineBasicMaterial({
+          color: color,
+          linewidth: isActive ? 3 : 2,
+          transparent: true,
+          opacity: isActive ? 1.0 : 0.7,
+        });
+        const line = new THREE.Line(geometry, material);
+        overlayGroup.add(line);
+
+        // Draw control points
+        if (isActive) {
+          const controlPoints = element.type === 'circle3p' || element.type === 'arc3p'
+            ? element.points
+            : element.type === 'line' ? [element.points[0], element.points[1]]
+            : element.points;
+
+          for (const cp of controlPoints) {
+            const cp3d = unprojectFromPlane(plane, cp);
+            const sphereGeo = new THREE.SphereGeometry(Math.max(0.3, (preview?.bounds[0] || 10) * 0.008), 8, 8);
+            const sphereMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+            sphere.position.set(cp3d[0], cp3d[1], cp3d[2]);
+            overlayGroup.add(sphere);
+          }
+        }
+      }
+    }
+
+    // Draw in-progress line
+    if (drawPointsRef.current.length > 0 && activeSketchId) {
+      const plane = run.sketchPlanes.find(p => p.id === run.sketches.find(s => s.id === activeSketchId)?.planeId);
+      if (plane) {
+        const points3D = drawPointsRef.current.map(p2d => {
+          const p3d = unprojectFromPlane(plane, p2d);
+          return new THREE.Vector3(p3d[0], p3d[1], p3d[2]);
+        });
+        if (points3D.length >= 2) {
+          const geometry = new THREE.BufferGeometry().setFromPoints(points3D);
+          const material = new THREE.LineBasicMaterial({ color: 0x00ff88, linewidth: 2 });
+          overlayGroup.add(new THREE.Line(geometry, material));
+        }
+        // Draw control points
+        for (const p of points3D) {
+          const sphereGeo = new THREE.SphereGeometry(Math.max(0.3, (preview?.bounds[0] || 10) * 0.01), 8, 8);
+          const sphereMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
+          const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+          sphere.position.copy(p);
+          overlayGroup.add(sphere);
+        }
+      }
+    }
+
+    sceneRef.current.add(overlayGroup);
+    overlayGroupRef.current = overlayGroup;
+  }, [run.sketches, run.sketchPlanes, activeSketchId, preview, run.orientation]);
 
   // Initialize Three.js
   useEffect(() => {
@@ -164,9 +239,6 @@ export function Viewport({
     scene.background = new THREE.Color(0x171b1f);
 
     const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
-    camera.position.set(60, 45, 60);
-    camera.lookAt(0, 0, 0);
-
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
@@ -211,7 +283,8 @@ export function Viewport({
     };
   }, []);
 
-  useEffect(() => { buildMesh(); }, [buildMesh]);
+  useEffect(() => { buildScene(); }, [buildScene]);
+  useEffect(() => { buildSketchOverlay(); }, [buildSketchOverlay]);
 
   useEffect(() => {
     switch (cameraView) {
@@ -222,10 +295,140 @@ export function Viewport({
     }
   }, [cameraView]);
 
+  // Get 3D point from mouse click via raycasting
+  const getClickPoint3D = useCallback((e: React.PointerEvent): [number, number, number] | null => {
+    if (!containerRef.current || !cameraRef.current || !meshRef.current) return null;
+    const rect = containerRef.current.getBoundingClientRect();
+    mouseRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouseRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
+    const intersects = raycasterRef.current.intersectObject(meshRef.current, false);
+    if (intersects.length === 0) return null;
+    const point = intersects[0].point;
+    // Reverse the group transform
+    const orientation = run.orientation;
+    const scale = orientation.scale;
+    const rotRad = orientation.rotation.map(v => -v * Math.PI / 180) as [number, number, number];
+    const center = new THREE.Vector3(...(preview?.center || [0, 0, 0]));
+    const p = point.clone();
+    p.add(center.clone().multiplyScalar(scale));
+    p.divideScalar(scale);
+    // Apply inverse rotation
+    p.applyAxisAngle(new THREE.Vector3(0, 0, 1), rotRad[2]);
+    p.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotRad[1]);
+    p.applyAxisAngle(new THREE.Vector3(1, 0, 0), rotRad[0]);
+    return [p.x, p.y, p.z];
+  }, [run.orientation, preview]);
+
+  // Handle drawing clicks
+  const handleViewportClick = useCallback((e: React.PointerEvent) => {
+    if (drawTool === 'select' || drawTool === 'pan') return;
+    if (!activeSketchId) return;
+
+    const point3D = getClickPoint3D(e);
+    if (!point3D) return;
+
+    const activeSketch = run.sketches.find(s => s.id === activeSketchId);
+    if (!activeSketch) return;
+    const plane = run.sketchPlanes.find(p => p.id === activeSketch.planeId);
+    if (!plane) return;
+
+    // Check if point is close enough to the sketch plane
+    const dist = distanceToPlane(plane, point3D);
+    const tolerance = Math.max(0.5, (preview?.bounds[0] || 10) * 0.02);
+    if (dist > tolerance) return;
+
+    const point2D = projectToPlane(plane, point3D);
+    drawPointsRef.current.push(point2D);
+
+    // Auto-complete based on tool
+    if (drawTool === 'line' && drawPointsRef.current.length === 2) {
+      onAddSketchElement({
+        id: crypto.randomUUID(),
+        type: 'line',
+        points: [drawPointsRef.current[0], drawPointsRef.current[1]],
+      });
+      drawPointsRef.current = [];
+    } else if (drawTool === 'circle3p' && drawPointsRef.current.length === 3) {
+      onAddSketchElement({
+        id: crypto.randomUUID(),
+        type: 'circle3p',
+        points: [drawPointsRef.current[0], drawPointsRef.current[1], drawPointsRef.current[2]],
+      });
+      drawPointsRef.current = [];
+    } else if (drawTool === 'arc3p' && drawPointsRef.current.length === 3) {
+      onAddSketchElement({
+        id: crypto.randomUUID(),
+        type: 'arc3p',
+        points: [drawPointsRef.current[0], drawPointsRef.current[1], drawPointsRef.current[2]],
+      });
+      drawPointsRef.current = [];
+    }
+
+    buildSketchOverlay();
+  }, [drawTool, activeSketchId, run.sketches, run.sketchPlanes, getClickPoint3D, onAddSketchElement, preview, buildSketchOverlay]);
+
+  // Finish polyline/spline on double-click or Enter
+  const handleDoubleClick = useCallback(() => {
+    if (drawTool === 'polyline' && drawPointsRef.current.length >= 2) {
+      onAddSketchElement({
+        id: crypto.randomUUID(),
+        type: 'polyline',
+        points: [...drawPointsRef.current],
+        closed: false,
+      });
+      drawPointsRef.current = [];
+      buildSketchOverlay();
+    } else if (drawTool === 'spline' && drawPointsRef.current.length >= 2) {
+      onAddSketchElement({
+        id: crypto.randomUUID(),
+        type: 'spline',
+        points: [...drawPointsRef.current],
+      });
+      drawPointsRef.current = [];
+      buildSketchOverlay();
+    }
+  }, [drawTool, onAddSketchElement, buildSketchOverlay]);
+
+  // Keyboard handler for finishing polylines
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === 'Escape') {
+        if (drawTool === 'polyline' && drawPointsRef.current.length >= 2) {
+          onAddSketchElement({
+            id: crypto.randomUUID(),
+            type: 'polyline',
+            points: [...drawPointsRef.current],
+            closed: e.key === 'Enter',
+          });
+          drawPointsRef.current = [];
+          buildSketchOverlay();
+        } else if (drawTool === 'spline' && drawPointsRef.current.length >= 2) {
+          onAddSketchElement({
+            id: crypto.randomUUID(),
+            type: 'spline',
+            points: [...drawPointsRef.current],
+          });
+          drawPointsRef.current = [];
+          buildSketchOverlay();
+        }
+        drawPointsRef.current = [];
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [drawTool, onAddSketchElement, buildSketchOverlay]);
+
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    if (drawTool === 'select' || drawTool === 'pan' || drawTool === 'line' || drawTool === 'polyline' || drawTool === 'circle3p' || drawTool === 'arc3p' || drawTool === 'spline') {
+      if (drawTool !== 'select' && drawTool !== 'pan') {
+        handleViewportClick(e);
+        return;
+      }
+    }
     dragRef.current = { x: e.clientX, y: e.clientY, yaw: yawRef.current, pitch: pitchRef.current };
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
+  }, [drawTool, handleViewportClick]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current) return;
@@ -242,6 +445,7 @@ export function Viewport({
 
   const hasMesh = preview && preview.preview.length > 0;
   const unitLabel = run.orientation.units === 'unknown' ? 'src units' : run.orientation.units;
+  const isDrawing = drawTool !== 'select' && drawTool !== 'pan';
 
   return (
     <section className="flex flex-col flex-1 min-w-0 bg-[#121518]">
@@ -252,33 +456,22 @@ export function Viewport({
         </div>
         <div className="flex gap-1 items-center">
           {(['iso', 'front', 'top'] as CameraView[]).map(view => (
-            <button
-              key={view}
-              type="button"
-              onClick={() => onCameraViewChange(view)}
+            <button key={view} type="button" onClick={() => onCameraViewChange(view)}
               className={`px-2 py-1 border rounded-sm text-[10px] cursor-pointer ${
-                cameraView === view
-                  ? 'border-[#80bdf0] text-white bg-[#286da9]'
-                  : 'border-[#42494f] text-[#aeb8bd] bg-[#292f34] hover:text-white hover:border-[#68737b]'
-              }`}
-            >
+                cameraView === view ? 'border-[#80bdf0] text-white bg-[#286da9]' : 'border-[#42494f] text-[#aeb8bd] bg-[#292f34] hover:text-white hover:border-[#68737b]'
+              }`}>
               {view.charAt(0).toUpperCase() + view.slice(1)}
             </button>
           ))}
-          <button
-            type="button"
-            onClick={() => { zoomRef.current = 1; }}
-            className="px-2 py-1 border border-[#42494f] rounded-sm text-[#aeb8bd] bg-[#292f34] text-[10px] cursor-pointer hover:text-white hover:border-[#68737b]"
-          >
+          <button type="button" onClick={() => { zoomRef.current = 1; }}
+            className="px-2 py-1 border border-[#42494f] rounded-sm text-[#aeb8bd] bg-[#292f34] text-[10px] cursor-pointer hover:text-white hover:border-[#68737b]">
             Fit
           </button>
-          <span className="ml-1 text-[#829098] text-[9px] hidden sm:inline">Drag to orbit · scroll to zoom</span>
         </div>
       </div>
 
-      <div
-        ref={containerRef}
-        className="relative flex-1 min-h-0 overflow-hidden cursor-grab active:cursor-grabbing"
+      <div ref={containerRef}
+        className={`relative flex-1 min-h-0 overflow-hidden ${isDrawing ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
         style={{
           backgroundColor: '#171b1f',
           backgroundImage: 'linear-gradient(#252b3040 1px, transparent 1px), linear-gradient(90deg, #252b3040 1px, transparent 1px)',
@@ -288,8 +481,9 @@ export function Viewport({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
-        onWheel={handleWheel}
-      >
+        onDoubleClick={handleDoubleClick}
+        onWheel={handleWheel}>
+
         {!hasMesh && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 text-[#b4bdc2] pointer-events-none">
             <div className="grid w-[54px] h-[54px] place-items-center border border-[#495158] rounded-full text-[#70a6ed] text-[29px]">◇</div>
@@ -298,64 +492,41 @@ export function Viewport({
           </div>
         )}
 
+        {/* Drawing mode indicator */}
+        {isDrawing && activeSketchId && (
+          <div className="absolute top-3 left-3 px-2 py-1 border border-[#00ff88] rounded-sm bg-[#002211dd] text-[#00ff88] text-[10px] font-bold">
+            DRAWING: {drawTool.toUpperCase()} · {drawPointsRef.current.length} pts · {drawTool === 'polyline' || drawTool === 'spline' ? 'Double-click or Enter to finish' : `Click ${drawTool === 'line' ? '2' : '3'} points`}
+          </div>
+        )}
+
         {/* View cube */}
         <div className="absolute top-4 right-4 grid grid-cols-2 gap-0.5 w-[72px] p-[3px] border border-[#4d5861] rounded bg-[#29323be8]">
           <button type="button" onClick={() => onCameraViewChange('top')}
-            className={`col-span-2 min-h-5 py-0.5 px-1 border rounded-sm text-[7px] font-bold cursor-pointer ${
-              cameraView === 'top' ? 'border-[#80bdf0] text-white bg-[#286da9]' : 'border-[#56636d] text-[#d7dfe3] bg-[#35414a] hover:border-[#83b9e8] hover:text-white'
-            }`}>TOP</button>
+            className={`col-span-2 min-h-5 py-0.5 px-1 border rounded-sm text-[7px] font-bold cursor-pointer ${cameraView === 'top' ? 'border-[#80bdf0] text-white bg-[#286da9]' : 'border-[#56636d] text-[#d7dfe3] bg-[#35414a] hover:border-[#83b9e8] hover:text-white'}`}>TOP</button>
           <button type="button" onClick={() => onCameraViewChange('front')}
-            className={`min-h-5 py-0.5 px-1 border rounded-sm text-[7px] font-bold cursor-pointer ${
-              cameraView === 'front' ? 'border-[#80bdf0] text-white bg-[#286da9]' : 'border-[#56636d] text-[#d7dfe3] bg-[#38536a] hover:border-[#83b9e8] hover:text-white'
-            }`}>FRONT</button>
+            className={`min-h-5 py-0.5 px-1 border rounded-sm text-[7px] font-bold cursor-pointer ${cameraView === 'front' ? 'border-[#80bdf0] text-white bg-[#286da9]' : 'border-[#56636d] text-[#d7dfe3] bg-[#38536a] hover:border-[#83b9e8] hover:text-white'}`}>FRONT</button>
           <button type="button" onClick={() => onCameraViewChange('right')}
-            className={`min-h-5 py-0.5 px-1 border rounded-sm text-[7px] font-bold cursor-pointer ${
-              cameraView === 'right' ? 'border-[#80bdf0] text-white bg-[#286da9]' : 'border-[#56636d] text-[#d7dfe3] bg-[#35414a] hover:border-[#83b9e8] hover:text-white'
-            }`}>RIGHT</button>
+            className={`min-h-5 py-0.5 px-1 border rounded-sm text-[7px] font-bold cursor-pointer ${cameraView === 'right' ? 'border-[#80bdf0] text-white bg-[#286da9]' : 'border-[#56636d] text-[#d7dfe3] bg-[#35414a] hover:border-[#83b9e8] hover:text-white'}`}>RIGHT</button>
         </div>
 
-        {/* Dimensions overlay */}
+        {/* Dimensions */}
         {hasMesh && preview && (
           <div className="absolute bottom-3 left-3 p-2 border border-[#44515a] rounded-sm bg-[#22282dd9] text-[9px]">
             <div className="text-[#aab4ba] font-bold tracking-[.8px] mb-1">DIMENSIONS ({unitLabel})</div>
             <div className="grid grid-cols-3 gap-2">
-              <div>
-                <span className="text-[#56a4ff]">X</span>{' '}
-                <span className="text-[#dae0e3] font-variant-numeric-tabular">{(preview.bounds[0] * run.orientation.scale).toFixed(2)}</span>
-              </div>
-              <div>
-                <span className="text-[#6f9db1]">Y</span>{' '}
-                <span className="text-[#dae0e3] font-variant-numeric-tabular">{(preview.bounds[1] * run.orientation.scale).toFixed(2)}</span>
-              </div>
-              <div>
-                <span className="text-[#67c38c]">Z</span>{' '}
-                <span className="text-[#dae0e3] font-variant-numeric-tabular">{(preview.bounds[2] * run.orientation.scale).toFixed(2)}</span>
-              </div>
+              <div><span className="text-[#56a4ff]">X</span> <span className="text-[#dae0e3]">{(preview.bounds[0] * run.orientation.scale).toFixed(2)}</span></div>
+              <div><span className="text-[#6f9db1]">Y</span> <span className="text-[#dae0e3]">{(preview.bounds[1] * run.orientation.scale).toFixed(2)}</span></div>
+              <div><span className="text-[#67c38c]">Z</span> <span className="text-[#dae0e3]">{(preview.bounds[2] * run.orientation.scale).toFixed(2)}</span></div>
             </div>
           </div>
         )}
 
-        {/* Object browser */}
-        {hasMesh && (
-          <div className="absolute top-4 right-[88px] w-[min(230px,38%)] p-2 border border-[#4a5259] rounded-sm bg-[#22282dd9] text-[10px]">
-            <div className="flex justify-between mb-2 text-[#aab4ba] text-[9px] font-bold tracking-[.8px]">
-              OBJECT BROWSER <span>•••</span>
-            </div>
-            <div className="flex justify-between gap-2 py-1 text-[#c9d1d5]">
-              ▾ {run.input?.name || 'Source STL'}
-              <small className="text-[#87939a] text-[9px]">{run.input ? 'STL' : 'not loaded'}</small>
-            </div>
-            <div className="flex justify-between gap-2 py-1 text-[#c9d1d5]">
-              Flat regions
-              <small className="text-[#87939a] text-[9px]">{preview?.flatRegions?.length || 0} detected</small>
-            </div>
-            <div className="flex justify-between gap-2 py-1 text-[#c9d1d5]">
-              Modifications
-              <small className="text-[#87939a] text-[9px]">{run.modifications.length} planned</small>
-            </div>
-            <div className="flex justify-between gap-2 py-1 text-[#c9d1d5]">
-              STEP output
-              <small className="text-[#87939a] text-[9px]">{run.export ? 'generated' : 'pending'}</small>
+        {/* Edge legend */}
+        {hasMesh && preview?.boundaryEdges && preview.boundaryEdges.length > 0 && (
+          <div className="absolute bottom-3 right-3 p-2 border border-[#44515a] rounded-sm bg-[#22282dd9] text-[9px]">
+            <div className="flex items-center gap-1.5">
+              <span className="w-4 h-0.5 bg-[#ffaa00]" />
+              <span className="text-[#aab4ba]">Detected edges ({preview.boundaryEdges.length})</span>
             </div>
           </div>
         )}
@@ -363,14 +534,12 @@ export function Viewport({
 
       <div className="flex h-[29px] items-center justify-between gap-3 px-2.5 border-t border-[#333a40] text-[#8f9ba2] bg-[#20262b] text-[9px]">
         <div>
-          {preview
-            ? `${preview.vertices.toLocaleString()} vertices · ${preview.triangles.toLocaleString()} triangles · bounds ${(preview.bounds[0] * run.orientation.scale).toFixed(1)} × ${(preview.bounds[1] * run.orientation.scale).toFixed(1)} × ${(preview.bounds[2] * run.orientation.scale).toFixed(1)} ${unitLabel}`
-            : 'Waiting for STL import'}
+          {preview ? `${preview.vertices.toLocaleString()} vertices · ${preview.triangles.toLocaleString()} triangles · ${preview.flatRegions?.length || 0} flat regions · ${preview.boundaryEdges?.length || 0} edges` : 'Waiting for STL import'}
         </div>
         <div className="flex items-center gap-2 whitespace-nowrap">
-          <span>{preview?.triangles ? 'Mesh parsed' : 'No STL loaded'}</span>
+          <span>{run.sketches.reduce((sum, s) => sum + s.elements.length, 0)} sketch elements</span>
           <span className={`inline-block w-1.5 h-1.5 rounded-full ${preview?.triangles ? 'bg-[#67c38c]' : 'bg-[#758087]'}`} />
-          <span>{run.orientation.units === 'unknown' ? 'Scale unverified' : `${run.orientation.units} · ${run.orientation.scale.toFixed(4)}×`}</span>
+          <span>{run.orientation.units} · {run.orientation.scale.toFixed(4)}×</span>
         </div>
       </div>
     </section>

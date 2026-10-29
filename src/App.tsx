@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { RunManifest, Stage, MeshPreview, CameraView, ModificationNote } from './types';
+import { RunManifest, Stage, MeshPreview, CameraView, DrawTool, Sketch, SketchElement, SketchPlane, ModificationNote } from './types';
 import { STAGE_INFO } from './cadTools';
 import { TopBar } from './components/TopBar';
 import { WorkflowRail } from './components/WorkflowRail';
@@ -7,6 +7,8 @@ import { Viewport } from './components/Viewport';
 import { Inspector } from './components/Inspector';
 import { StatusBar } from './components/StatusBar';
 import { parseSTL } from './utils/stlParser';
+import { detectBoundaryEdges } from './utils/edgeDetector';
+import { createSketchPlane } from './utils/sketchGeometry';
 
 function createInitialRun(): RunManifest {
   return {
@@ -17,6 +19,9 @@ function createInitialRun(): RunManifest {
     export: null,
     orientation: { rotation: [0, 0, 0], scale: 1.0, units: 'mm' },
     orientationConfirmed: false,
+    sketchPlanes: [],
+    sketches: [],
+    identifiedPrimitives: [],
     modifications: [],
     reviewNotes: '',
     reviewComplete: false,
@@ -54,6 +59,8 @@ export default function App() {
   const [cameraView, setCameraView] = useState<CameraView>('iso');
   const [message, setMessage] = useState<string>('');
   const [flatFaceIndex, setFlatFaceIndex] = useState(0);
+  const [drawTool, setDrawTool] = useState<DrawTool>('select');
+  const [activeSketchId, setActiveSketchId] = useState<string | null>(null);
 
   const handleNewProject = useCallback(() => {
     setRun(createInitialRun());
@@ -61,13 +68,21 @@ export default function App() {
     setPreview(null);
     setFlatFaceIndex(0);
     setMessage('');
+    setDrawTool('select');
+    setActiveSketchId(null);
   }, []);
 
   const handleImportSTL = useCallback(async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
       const meshPreview = parseSTL(buffer, file.name);
-      
+
+      // Detect boundary edges on flat regions
+      if (meshPreview.flatRegions && meshPreview.flatRegions.length > 0) {
+        const boundaryEdges = detectBoundaryEdges(meshPreview.preview, meshPreview.flatRegions);
+        meshPreview.boundaryEdges = boundaryEdges;
+      }
+
       setPreview(meshPreview);
       setRun(prev => ({
         ...prev,
@@ -75,6 +90,9 @@ export default function App() {
         input: { name: file.name, path: file.name, size: file.size },
         orientation: { rotation: [0, 0, 0], scale: 1.0, units: 'mm' },
         orientationConfirmed: false,
+        sketchPlanes: [],
+        sketches: [],
+        identifiedPrimitives: [],
         reviewComplete: false,
         modifications: [],
         reviewNotes: '',
@@ -93,17 +111,44 @@ export default function App() {
   }, []);
 
   const handleConfirmOrientation = useCallback((rotation: [number, number, number], scale: number, units: string) => {
+    // Create sketch planes for each flat region
+    const newPlanes: SketchPlane[] = [];
+    if (preview?.flatRegions) {
+      preview.flatRegions.forEach((region, idx) => {
+        const plane = createSketchPlane(
+          idx,
+          region.normal,
+          region.center,
+          `Face ${idx + 1} (${region.side})`
+        );
+        newPlanes.push(plane);
+      });
+    }
+
+    // Create a sketch for each plane
+    const newSketches: Sketch[] = newPlanes.map((plane, idx) => ({
+      id: crypto.randomUUID(),
+      planeId: plane.id,
+      elements: [],
+      color: ['#38a9ff', '#f2ae54', '#aa8bf2', '#59c8a9', '#e77f9d', '#b8ca59'][idx % 6],
+      name: `Sketch ${idx + 1}`,
+    }));
+
     setRun(prev => ({
       ...prev,
       orientation: { rotation, scale, units },
       orientationConfirmed: true,
+      sketchPlanes: newPlanes,
+      sketches: newSketches,
       reviewComplete: false,
+      identifiedPrimitives: [],
       modifications: [],
       reviewNotes: '',
     }));
     setStage(1);
+    if (newSketches.length > 0) setActiveSketchId(newSketches[0].id);
     setMessage('');
-  }, []);
+  }, [preview]);
 
   const handleSetOrientation = useCallback((rotation: [number, number, number]) => {
     setRun(prev => ({
@@ -127,28 +172,31 @@ export default function App() {
     }));
   }, []);
 
-  const handleAddModification = useCallback((mod: ModificationNote) => {
+  const handleAddSketchElement = useCallback((element: SketchElement) => {
+    if (!activeSketchId) return;
     setRun(prev => ({
       ...prev,
-      modifications: [...prev.modifications, mod],
+      sketches: prev.sketches.map(s =>
+        s.id === activeSketchId
+          ? { ...s, elements: [...s.elements, element] }
+          : s
+      ),
     }));
-  }, []);
+  }, [activeSketchId]);
 
-  const handleUpdateModification = useCallback((id: string, updates: Partial<ModificationNote>) => {
+  const handleDeleteSketchElement = useCallback((elementId: string) => {
+    if (!activeSketchId) return;
     setRun(prev => ({
       ...prev,
-      modifications: prev.modifications.map(m => m.id === id ? { ...m, ...updates } : m),
+      sketches: prev.sketches.map(s =>
+        s.id === activeSketchId
+          ? { ...s, elements: s.elements.filter(e => e.id !== elementId) }
+          : s
+      ),
     }));
-  }, []);
+  }, [activeSketchId]);
 
-  const handleDeleteModification = useCallback((id: string) => {
-    setRun(prev => ({
-      ...prev,
-      modifications: prev.modifications.filter(m => m.id !== id),
-    }));
-  }, []);
-
-  const handleConfirmModifications = useCallback((notes: string) => {
+  const handleConfirmSketches = useCallback((notes: string) => {
     setRun(prev => ({
       ...prev,
       reviewNotes: notes,
@@ -158,22 +206,41 @@ export default function App() {
     setMessage('');
   }, []);
 
-  const handleConvertToSTEP = useCallback(() => {
+  const handleExportProject = useCallback((format: 'step' | 'iges' | 'dxf' | 'json') => {
     const sourceName = run.input?.name || 'mesh.stl';
     const stem = sourceName.replace(/\.stl$/i, '');
+    const ext = format === 'step' ? 'step' : format === 'iges' ? 'igs' : format === 'dxf' ? 'dxf' : 'json';
+
+    // Generate export data
+    const exportData = {
+      projectName: run.projectName,
+      orientation: run.orientation,
+      sketchPlanes: run.sketchPlanes,
+      sketches: run.sketches,
+      identifiedPrimitives: run.identifiedPrimitives,
+      modifications: run.modifications,
+    };
+
+    // Create download
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${stem}_project.${ext === 'json' ? 'json' : 'json'}`;
+    a.click();
+    URL.revokeObjectURL(url);
+
     setRun(prev => ({
       ...prev,
       export: {
-        name: `${stem}_editable.step`,
-        path: `${stem}_editable.step`,
+        name: `${stem}_project.${ext}`,
+        path: `${stem}_project.${ext}`,
         generated: true,
-        triangles: preview?.triangles || 0,
-        solids: 1,
-        boundsMm: preview?.bounds || [0, 0, 0],
+        format,
       },
     }));
-    setMessage('STEP file generated. Download and open in your CAD tool.');
-  }, [run.input, preview]);
+    setMessage(`Project exported as ${format.toUpperCase()}. Import into your CAD tool.`);
+  }, [run]);
 
   const handleSetCadTool = useCallback((toolId: string) => {
     setRun(prev => ({
@@ -196,6 +263,27 @@ export default function App() {
       setStage(newStage);
     }
   }, [run]);
+
+  const handleAddModification = useCallback((mod: ModificationNote) => {
+    setRun(prev => ({
+      ...prev,
+      modifications: [...prev.modifications, mod],
+    }));
+  }, []);
+
+  const handleUpdateModification = useCallback((id: string, updates: Partial<ModificationNote>) => {
+    setRun(prev => ({
+      ...prev,
+      modifications: prev.modifications.map(m => m.id === id ? { ...m, ...updates } : m),
+    }));
+  }, []);
+
+  const handleDeleteModification = useCallback((id: string) => {
+    setRun(prev => ({
+      ...prev,
+      modifications: prev.modifications.filter(m => m.id !== id),
+    }));
+  }, []);
 
   const currentStageInfo = STAGE_INFO[stage];
 
@@ -220,6 +308,9 @@ export default function App() {
           onCameraViewChange={setCameraView}
           stage={stage}
           flatFaceIndex={flatFaceIndex}
+          drawTool={drawTool}
+          activeSketchId={activeSketchId}
+          onAddSketchElement={handleAddSketchElement}
         />
 
         <Inspector
@@ -234,14 +325,19 @@ export default function App() {
           onSetOrientation={handleSetOrientation}
           onSetUnits={handleSetUnits}
           onSetScale={handleSetScale}
-          onAddModification={handleAddModification}
-          onUpdateModification={handleUpdateModification}
-          onDeleteModification={handleDeleteModification}
-          onConfirmModifications={handleConfirmModifications}
-          onConvertToSTEP={handleConvertToSTEP}
+          drawTool={drawTool}
+          onDrawToolChange={setDrawTool}
+          activeSketchId={activeSketchId}
+          onSetActiveSketchId={setActiveSketchId}
+          onDeleteSketchElement={handleDeleteSketchElement}
+          onConfirmSketches={handleConfirmSketches}
+          onExportProject={handleExportProject}
           onSetCadTool={handleSetCadTool}
           onValidate={handleValidate}
           onSetStage={handleSetStage}
+          onAddModification={handleAddModification}
+          onUpdateModification={handleUpdateModification}
+          onDeleteModification={handleDeleteModification}
           message={message}
           onMessageChange={setMessage}
         />

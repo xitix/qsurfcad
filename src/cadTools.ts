@@ -8,7 +8,6 @@ export const CAD_TOOLS: CadTool[] = [
     platform: 'Web (future) / Desktop',
     icon: '◆',
     bestFor: ['Parametric editing', 'Dimension-driven design', 'Production-ready parts'],
-    available: false,
   },
   {
     id: 'freecad',
@@ -17,7 +16,6 @@ export const CAD_TOOLS: CadTool[] = [
     platform: 'Desktop (Linux/Win/Mac)',
     icon: '⬡',
     bestFor: ['Complex assemblies', 'Parametric constraints', 'Free/open-source workflow'],
-    available: true,
   },
   {
     id: 'moi3d',
@@ -26,7 +24,6 @@ export const CAD_TOOLS: CadTool[] = [
     platform: 'Windows (Wine/Bottles)',
     icon: '◈',
     bestFor: ['Organic shapes', 'Smooth surfaces', 'Quick concept modeling'],
-    available: true,
   },
   {
     id: 'onshape',
@@ -35,7 +32,6 @@ export const CAD_TOOLS: CadTool[] = [
     platform: 'Web (cloud)',
     icon: '◇',
     bestFor: ['Cloud collaboration', 'Version control', 'No-install workflow'],
-    available: true,
   },
 ];
 
