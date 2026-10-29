@@ -17,12 +17,15 @@
     "date-fns": "^2.30.0",
     "framer-motion": "^11.16.1",
     "lucide-react": "^0.294.0",
+    "opencascade.js": "^1.1.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.8.0",
     "recharts": "^2.10.0",
     "three": "^0.186.1",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "vite-plugin-top-level-await": "^1.6.0",
+    "vite-plugin-wasm": "^3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.7",

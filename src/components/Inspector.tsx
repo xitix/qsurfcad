@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { RunManifest, Stage, MeshPreview, DrawTool, ModificationNote } from '../types';
 import { STAGE_INFO, CAD_TOOLS, MODIFICATION_TYPES, FLAT_FACE_COLORS } from '../cadTools';
+import { SnapEngine } from '../utils/snapEngine';
+import { ConstraintSolver } from '../utils/constraintSolver';
 
 interface InspectorProps {
   stage: Stage;
@@ -30,6 +32,9 @@ interface InspectorProps {
   onDeleteModification: (id: string) => void;
   message: string;
   onMessageChange: (msg: string) => void;
+  constraintSolver?: ConstraintSolver;
+  snapEngine?: SnapEngine | null;
+  onImportSTEP?: (file: File) => void;
 }
 
 function formatNumber(value: number): string {
@@ -63,6 +68,7 @@ export function Inspector(props: InspectorProps) {
     onSetCadTool, onValidate, onSetStage,
     onAddModification, onUpdateModification, onDeleteModification,
     message, onMessageChange,
+    constraintSolver, snapEngine, onImportSTEP,
   } = props;
 
   const [rotationX, setRotationX] = useState(0);

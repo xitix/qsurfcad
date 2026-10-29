@@ -5,6 +5,8 @@ import { MeshPreview, RunManifest, Stage, CameraView, DrawTool, SketchElement, S
 import { FLAT_FACE_COLORS } from '../cadTools';
 import { projectToPlane, unprojectFromPlane, distanceToPlane, sampleElement } from '../utils/sketchGeometry';
 import { findSnapPoint, calculateSnapRadius, SnapPoint } from '../utils/snapDetector';
+import { BRepTopology } from '../utils/stepImporter';
+import { SnapEngine } from '../utils/snapEngine';
 
 interface ViewportProps {
   preview: MeshPreview | null;
@@ -17,11 +19,15 @@ interface ViewportProps {
   activeSketchId: string | null;
   onAddSketchElement: (element: SketchElement) => void;
   onSelectFace?: (faceIndex: number) => void;
+  stepTopology?: BRepTopology | null;
+  snapEngine?: SnapEngine | null;
+  onImportSTEP?: (file: File) => void;
 }
 
 export function Viewport({
   preview, run, cameraView, onCameraViewChange, stage, flatFaceIndex,
   drawTool, activeSketchId, onAddSketchElement, onSelectFace,
+  stepTopology, snapEngine, onImportSTEP,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);

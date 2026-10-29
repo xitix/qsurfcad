@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { RunManifest, Stage, MeshPreview, CameraView, DrawTool, Sketch, SketchElement, SketchPlane, ModificationNote } from './types';
 import { STAGE_INFO } from './cadTools';
 import { TopBar } from './components/TopBar';
@@ -13,6 +13,9 @@ import { downloadDXF } from './utils/dxfExport';
 import { downloadSTL } from './utils/stlExport';
 import { detectPrimitives } from './utils/primitiveDetection';
 import { downloadSTEP } from './utils/stepExport';
+import type { BRepTopology } from './utils/stepImporter';
+import { SnapEngine } from './utils/snapEngine';
+import { ConstraintSolver } from './utils/constraintSolver';
 
 function createInitialRun(): RunManifest {
   return {
@@ -65,6 +68,19 @@ export default function App() {
   const [flatFaceIndex, setFlatFaceIndex] = useState(0);
   const [drawTool, setDrawTool] = useState<DrawTool>('select');
   const [activeSketchId, setActiveSketchId] = useState<string | null>(null);
+  
+  // Magic Trace state
+  const [stepTopology, setStepTopology] = useState<BRepTopology | null>(null);
+  const [snapEngine, setSnapEngine] = useState<SnapEngine | null>(null);
+  const [constraintSolver] = useState<ConstraintSolver>(new ConstraintSolver());
+
+  useEffect(() => {
+    if (stepTopology) {
+      const engine = new SnapEngine(stepTopology, 1.0);
+      setSnapEngine(engine);
+      setMessage(`Loaded STEP: ${stepTopology.faces.length} faces, ${stepTopology.edges.length} edges, ${stepTopology.vertices.length} vertices`);
+    }
+  }, [stepTopology]);
 
   const handleNewProject = useCallback(() => {
     setRun(createInitialRun());
@@ -74,6 +90,28 @@ export default function App() {
     setMessage('');
     setDrawTool('select');
     setActiveSketchId(null);
+    setStepTopology(null);
+    setSnapEngine(null);
+  }, []);
+
+  const handleImportSTEP = useCallback(async (file: File) => {
+    try {
+      setMessage('Loading STEP file...');
+      const content = await file.text();
+      
+      // TODO: STEP import requires OpenCASCADE.js configuration
+      // For now, show a message that this feature is coming soon
+      setMessage('STEP import coming soon - use brep.io/stl2step for now');
+      
+      // When OpenCASCADE is properly configured:
+      // const { loadSTEP } = await import('./utils/stepImporter');
+      // const topology = await loadSTEP(content);
+      // setStepTopology(topology);
+      // setStage(1);
+    } catch (error) {
+      console.error('Error loading STEP:', error);
+      setMessage(`Error loading STEP: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }, []);
 
   const handleImportSTL = useCallback(async (file: File) => {
@@ -378,6 +416,9 @@ export default function App() {
           activeSketchId={activeSketchId}
           onAddSketchElement={handleAddSketchElement}
           onSelectFace={handleSelectFace}
+          stepTopology={stepTopology}
+          snapEngine={snapEngine}
+          onImportSTEP={handleImportSTEP}
         />
 
         <Inspector
@@ -408,6 +449,9 @@ export default function App() {
           onDeleteModification={handleDeleteModification}
           message={message}
           onMessageChange={setMessage}
+          constraintSolver={constraintSolver}
+          snapEngine={snapEngine}
+          onImportSTEP={handleImportSTEP}
         />
       </div>
 
