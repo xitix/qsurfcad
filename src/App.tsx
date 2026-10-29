@@ -11,6 +11,8 @@ import { detectBoundaryEdges } from './utils/edgeDetector';
 import { createSketchPlane } from './utils/sketchGeometry';
 import { downloadDXF } from './utils/dxfExport';
 import { downloadSTL } from './utils/stlExport';
+import { detectPrimitives } from './utils/primitiveDetection';
+import { downloadSTEP } from './utils/stepExport';
 
 function createInitialRun(): RunManifest {
   return {
@@ -212,7 +214,39 @@ export default function App() {
     const sourceName = run.input?.name || 'mesh.stl';
     const stem = sourceName.replace(/\.stl$/i, '');
 
-    if (format === 'dxf') {
+    if (format === 'step' || format === 'iges') {
+      // Export with automatic primitive detection
+      if (preview) {
+        const primitives = detectPrimitives(preview, {
+          distanceTolerance: 0.1,
+          normalTolerance: 5 * Math.PI / 180,
+          minSupport: 10,
+          maxIterations: 1000,
+        });
+
+        const ext = format === 'step' ? 'step' : 'igs';
+        downloadSTEP(primitives, preview, `${stem}_analytic.${ext}`, run.projectName);
+        setMessage(`Exported ${ext.toUpperCase()} with ${primitives.length} detected primitives (planes, cylinders, circles).`);
+
+        setRun(prev => ({
+          ...prev,
+          identifiedPrimitives: primitives.map(p => ({
+            id: p.id,
+            loopId: '',
+            sketchId: '',
+            kind: p.type as any,
+            parameters: p.parameters,
+            done: false,
+          })),
+          export: {
+            name: `${stem}_analytic.${ext}`,
+            path: `${stem}_analytic.${ext}`,
+            generated: true,
+            format,
+          },
+        }));
+      }
+    } else if (format === 'dxf') {
       // Export sketches as DXF
       downloadDXF(run.sketches, run.sketchPlanes, `${stem}_sketches.dxf`, run.orientation.units);
       setMessage('Sketches exported as DXF. Import into your CAD tool.');
@@ -224,7 +258,6 @@ export default function App() {
       }
     } else {
       // Export project data as JSON (for backup/transfer)
-      const ext = format === 'step' ? 'step' : format === 'iges' ? 'igs' : 'json';
       const exportData = {
         projectName: run.projectName,
         orientation: run.orientation,
@@ -244,15 +277,17 @@ export default function App() {
       setMessage(`Project data exported as JSON.`);
     }
 
-    setRun(prev => ({
-      ...prev,
-      export: {
-        name: `${stem}_export.${format === 'dxf' ? 'dxf' : format === 'stl' ? 'stl' : 'json'}`,
-        path: `${stem}_export.${format === 'dxf' ? 'dxf' : format === 'stl' ? 'stl' : 'json'}`,
-        generated: true,
-        format: format as any,
-      },
-    }));
+    if (format !== 'step' && format !== 'iges') {
+      setRun(prev => ({
+        ...prev,
+        export: {
+          name: `${stem}_export.${format === 'dxf' ? 'dxf' : format === 'stl' ? 'stl' : 'json'}`,
+          path: `${stem}_export.${format === 'dxf' ? 'dxf' : format === 'stl' ? 'stl' : 'json'}`,
+          generated: true,
+          format: format as any,
+        },
+      }));
+    }
   }, [run, preview]);
 
   const handleSetCadTool = useCallback((toolId: string) => {

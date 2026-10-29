@@ -402,9 +402,17 @@ export function Inspector(props: InspectorProps) {
           </div>
 
           <div className="grid gap-2 mt-3">
+            <button type="button" onClick={() => onExportProject('step')}
+              className="w-full min-h-[30px] py-2 px-2.5 border border-[#67c38c] rounded-sm text-white bg-[#2d8a4e] text-[10px] font-semibold cursor-pointer hover:bg-[#35a05a]">
+              Export as STEP (analytic surfaces)
+            </button>
+            <button type="button" onClick={() => onExportProject('iges')}
+              className="w-full min-h-[30px] py-2 px-2.5 border border-[#4a535b] rounded-sm text-[#cad2d7] bg-[#30363c] text-[10px] font-semibold cursor-pointer hover:bg-[#3a4248]">
+              Export as IGES (analytic surfaces)
+            </button>
             <button type="button" onClick={() => onExportProject('dxf')}
               className="w-full min-h-[30px] py-2 px-2.5 border border-[#3982ee] rounded-sm text-white bg-[#286fda] text-[10px] font-semibold cursor-pointer hover:bg-[#3986fa]">
-              Export sketches as DXF (FreeCAD / SolidCraft / MOI3D)
+              Export sketches as DXF
             </button>
             <button type="button" onClick={() => onExportProject('stl')}
               className="w-full min-h-[30px] py-2 px-2.5 border border-[#4a535b] rounded-sm text-[#cad2d7] bg-[#30363c] text-[10px] font-semibold cursor-pointer hover:bg-[#3a4248]">
@@ -415,9 +423,11 @@ export function Inspector(props: InspectorProps) {
               Export project data as JSON (backup)
             </button>
           </div>
+          <p className="my-2 pl-2 border-l-2 border-[#67c38c] text-[#9cddb2] bg-[#20352a] text-[9px] leading-[1.5] py-2">
+            <strong>STEP/IGES:</strong> Automatically detects analytic surfaces (planes, cylinders, circles) and exports as B-rep solid.
+          </p>
           <p className="my-2 pl-2 border-l-2 border-[#e5b45b] text-[#c6b184] bg-[#332e24] text-[9px] leading-[1.5] py-2">
-            <strong>Workflow:</strong> Export DXF → Import into CAD → Reconstruct parametric solids from sketches.
-            The DXF contains your traced sketches as 2D/3D curves ready for extrusion, revolution, or other CAD operations.
+            <strong>DXF:</strong> Exports your traced sketches as 2D/3D curves for manual reconstruction in CAD.
           </p>
 
           {run.export && (
@@ -435,29 +445,22 @@ export function Inspector(props: InspectorProps) {
         </div>
       )}
 
-      {/* Stage 3: Route to CAD */}
+      {/* Stage 3: Complete */}
       {stage === 3 && (
         <div className="p-4">
-          <h2 className="my-2 text-[#bcc5ca] text-[9px] font-bold tracking-[1px]">ROUTE TO CAD TOOL</h2>
+          <h2 className="my-2 text-[#bcc5ca] text-[9px] font-bold tracking-[1px]">PROJECT COMPLETE</h2>
           <p className="my-1.5 text-[#929da3] text-[10px] leading-[1.55]">
-            Import the exported file into your target CAD tool. Use the modification plan as your editing checklist.
+            Import the exported file into your CAD tool. Use the modification plan as your editing checklist.
           </p>
 
-          <div className="grid gap-2 mt-2">
-            {CAD_TOOLS.map(tool => (
-              <button key={tool.id} type="button" onClick={() => onSetCadTool(tool.id)}
-                className={`flex items-center gap-2 p-2 border rounded-sm text-left cursor-pointer ${
-                  run.targetCadTool === tool.id ? 'border-[#4a87ad] bg-[#263b49]' : 'border-[#414a51] bg-[#23282d] hover:bg-[#2a3036]'
-                }`}>
-                <span className="grid w-7 h-7 place-items-center border border-[#52616a] rounded-sm text-[#81b0f2] text-[15px] shrink-0">{tool.icon}</span>
-                <div className="grid gap-0.5 min-w-0">
-                  <strong className="text-[10px]">{tool.name}</strong>
-                  <small className="text-[#9ba6ac] text-[9px]">{tool.platform}</small>
-                </div>
-                {run.targetCadTool === tool.id && <span className="ml-auto text-[#67c38c] text-[10px]">✓</span>}
-              </button>
-            ))}
-          </div>
+          {run.export && (
+            <div className="mt-3 p-2 border border-[#356c4a] bg-[#20352a] text-[#9cddb2] text-[10px] leading-[1.5]">
+              ✓ Exported: {run.export.name}
+              {run.identifiedPrimitives.length > 0 && (
+                <><br />Detected {run.identifiedPrimitives.length} analytic primitives</>
+              )}
+            </div>
+          )}
 
           {/* Modifications */}
           <div className="h-px my-3 bg-[#3b4248]" />
@@ -517,8 +520,7 @@ export function Inspector(props: InspectorProps) {
 
           {run.validated && (
             <div className="mt-3 p-2 border border-[#356c4a] text-[#9cddb2] bg-[#20352a] text-[10px] leading-[1.5]">
-              ✓ Project complete. Sketches and modification plan documented.
-              {run.targetCadTool === 'solidcraft' && <><br /><br />When SolidCraft web-app is ready, this project will sync to your make3d.ro repository.</>}
+              ✓ Project complete. Export file ready for CAD import.
             </div>
           )}
         </div>
