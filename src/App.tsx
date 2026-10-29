@@ -285,6 +285,24 @@ export default function App() {
     }));
   }, []);
 
+  const handleSelectFace = useCallback((faceIndex: number) => {
+    setFlatFaceIndex(faceIndex);
+    // Auto-select the corresponding sketch plane
+    if (run.sketches[faceIndex]) {
+      setActiveSketchId(run.sketches[faceIndex].id);
+    }
+  }, [run.sketches]);
+
+  const handleSkipSketch = useCallback(() => {
+    setRun(prev => ({
+      ...prev,
+      reviewNotes: 'Skipped sketching stage',
+      reviewComplete: true,
+    }));
+    setStage(2);
+    setMessage('Skipped sketching. You can add modifications in the next stage.');
+  }, []);
+
   const currentStageInfo = STAGE_INFO[stage];
 
   return (
@@ -311,6 +329,7 @@ export default function App() {
           drawTool={drawTool}
           activeSketchId={activeSketchId}
           onAddSketchElement={handleAddSketchElement}
+          onSelectFace={handleSelectFace}
         />
 
         <Inspector
@@ -331,6 +350,7 @@ export default function App() {
           onSetActiveSketchId={setActiveSketchId}
           onDeleteSketchElement={handleDeleteSketchElement}
           onConfirmSketches={handleConfirmSketches}
+          onSkipSketch={handleSkipSketch}
           onExportProject={handleExportProject}
           onSetCadTool={handleSetCadTool}
           onValidate={handleValidate}

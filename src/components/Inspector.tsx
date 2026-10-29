@@ -20,6 +20,7 @@ interface InspectorProps {
   onSetActiveSketchId: (id: string | null) => void;
   onDeleteSketchElement: (elementId: string) => void;
   onConfirmSketches: (notes: string) => void;
+  onSkipSketch: () => void;
   onExportProject: (format: 'step' | 'iges' | 'dxf' | 'json') => void;
   onSetCadTool: (toolId: string) => void;
   onValidate: (notes: string) => void;
@@ -58,7 +59,7 @@ export function Inspector(props: InspectorProps) {
     onFlatFaceIndexChange, onImportSTL, onConfirmOrientation,
     onSetOrientation, onSetUnits, onSetScale,
     drawTool, onDrawToolChange, activeSketchId, onSetActiveSketchId,
-    onDeleteSketchElement, onConfirmSketches, onExportProject,
+    onDeleteSketchElement, onConfirmSketches, onSkipSketch, onExportProject,
     onSetCadTool, onValidate, onSetStage,
     onAddModification, onUpdateModification, onDeleteModification,
     message, onMessageChange,
@@ -358,11 +359,16 @@ export function Inspector(props: InspectorProps) {
             maxLength={4000} placeholder="Notes about the sketch, identified features, intended primitives…"
             className="w-full min-h-[54px] p-2 border border-[#4b545b] rounded-sm bg-[#20252a] text-[#e1e6e9] text-[10px] resize-y outline-none" />
 
-          <div className="mt-3">
+          <div className="mt-3 space-y-2">
             <button type="button" disabled={totalElements === 0}
               onClick={() => onConfirmSketches(reviewNotes)}
               className="w-full min-h-[30px] py-2 px-2.5 border border-[#3982ee] rounded-sm text-white bg-[#286fda] text-[10px] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#3986fa]">
               Validate sketches → Export
+            </button>
+            <button type="button"
+              onClick={onSkipSketch}
+              className="w-full min-h-[30px] py-2 px-2.5 border border-[#4a535b] rounded-sm text-[#cad2d7] bg-[#30363c] text-[10px] font-semibold cursor-pointer hover:bg-[#3a4248]">
+              Skip sketching → Export
             </button>
           </div>
         </div>

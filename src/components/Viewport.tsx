@@ -1,5 +1,6 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { MeshPreview, RunManifest, Stage, CameraView, DrawTool, SketchElement, SketchPlane, Point2D } from '../types';
 import { FLAT_FACE_COLORS } from '../cadTools';
 import { projectToPlane, unprojectFromPlane, distanceToPlane, sampleElement } from '../utils/sketchGeometry';
@@ -14,28 +15,27 @@ interface ViewportProps {
   drawTool: DrawTool;
   activeSketchId: string | null;
   onAddSketchElement: (element: SketchElement) => void;
+  onSelectFace?: (faceIndex: number) => void;
 }
 
 export function Viewport({
   preview, run, cameraView, onCameraViewChange, stage, flatFaceIndex,
-  drawTool, activeSketchId, onAddSketchElement,
+  drawTool, activeSketchId, onAddSketchElement, onSelectFace,
 }: ViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
   const meshGroupRef = useRef<THREE.Group | null>(null);
   const overlayGroupRef = useRef<THREE.Group | null>(null);
   const axisGroupRef = useRef<THREE.Group | null>(null);
-  const yawRef = useRef(-0.65);
-  const pitchRef = useRef(0.45);
-  const zoomRef = useRef(1);
-  const dragRef = useRef<{ x: number; y: number; yaw: number; pitch: number } | null>(null);
   const animFrameRef = useRef<number>(0);
   const drawPointsRef = useRef<Point2D[]>([]);
   const meshRef = useRef<THREE.Mesh | null>(null);
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
+  const [hoveredPoint, setHoveredPoint] = useState<THREE.Vector3 | null>(null);
 
   const buildScene = useCallback(() => {
     if (!sceneRef.current || !preview) return;
@@ -114,7 +114,7 @@ export function Viewport({
         vertexColors: true, 
         flatShading: true, 
         shininess: 20,
-        side: THREE.DoubleSide // Render both sides of faces
+        side: THREE.DoubleSide
       });
       const mesh = new THREE.Mesh(geometry, material);
       group.add(mesh);
@@ -138,7 +138,7 @@ export function Viewport({
     sceneRef.current.add(group);
     meshGroupRef.current = group;
 
-    // Add world axes (fixed, not transformed)
+    // Add world axes
     const axisLength = Math.max(preview.bounds[0], preview.bounds[1], preview.bounds[2]) * 0.6;
     const axisGroup = new THREE.Group();
     
@@ -150,7 +150,6 @@ export function Viewport({
     const xAxisMat = new THREE.LineBasicMaterial({ color: 0xff4444, linewidth: 2 });
     axisGroup.add(new THREE.Line(xAxisGeo, xAxisMat));
     
-    // X arrow head
     const xArrowGeo = new THREE.ConeGeometry(axisLength * 0.03, axisLength * 0.08, 8);
     const xArrowMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
     const xArrow = new THREE.Mesh(xArrowGeo, xArrowMat);
@@ -166,7 +165,6 @@ export function Viewport({
     const yAxisMat = new THREE.LineBasicMaterial({ color: 0x44ff44, linewidth: 2 });
     axisGroup.add(new THREE.Line(yAxisGeo, yAxisMat));
     
-    // Y arrow head
     const yArrowGeo = new THREE.ConeGeometry(axisLength * 0.03, axisLength * 0.08, 8);
     const yArrowMat = new THREE.MeshBasicMaterial({ color: 0x44ff44 });
     const yArrow = new THREE.Mesh(yArrowGeo, yArrowMat);
@@ -181,7 +179,6 @@ export function Viewport({
     const zAxisMat = new THREE.LineBasicMaterial({ color: 0x4444ff, linewidth: 2 });
     axisGroup.add(new THREE.Line(zAxisGeo, zAxisMat));
     
-    // Z arrow head
     const zArrowGeo = new THREE.ConeGeometry(axisLength * 0.03, axisLength * 0.08, 8);
     const zArrowMat = new THREE.MeshBasicMaterial({ color: 0x4444ff });
     const zArrow = new THREE.Mesh(zArrowGeo, zArrowMat);
@@ -189,38 +186,17 @@ export function Viewport({
     zArrow.rotation.x = Math.PI / 2;
     axisGroup.add(zArrow);
     
-    // Origin marker (yellow sphere)
+    // Origin marker
     const originGeo = new THREE.SphereGeometry(axisLength * 0.04, 16, 16);
     const originMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-    const originMarker = new THREE.Mesh(originGeo, originMat);
-    originMarker.position.set(0, 0, 0);
-    axisGroup.add(originMarker);
+    axisGroup.add(new THREE.Mesh(originGeo, originMat));
     
-    // Center point marker (cyan sphere)
+    // Center point marker
     const centerGeo = new THREE.SphereGeometry(axisLength * 0.03, 16, 16);
     const centerMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 });
     const centerMarker = new THREE.Mesh(centerGeo, centerMat);
     centerMarker.position.set(preview.center[0], preview.center[1], preview.center[2]);
     axisGroup.add(centerMarker);
-    
-    // Center cross-hair lines
-    const crossSize = axisLength * 0.08;
-    const crossGeo1 = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(preview.center[0] - crossSize, preview.center[1], preview.center[2]),
-      new THREE.Vector3(preview.center[0] + crossSize, preview.center[1], preview.center[2]),
-    ]);
-    const crossGeo2 = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(preview.center[0], preview.center[1] - crossSize, preview.center[2]),
-      new THREE.Vector3(preview.center[0], preview.center[1] + crossSize, preview.center[2]),
-    ]);
-    const crossGeo3 = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(preview.center[0], preview.center[1], preview.center[2] - crossSize),
-      new THREE.Vector3(preview.center[0], preview.center[1], preview.center[2] + crossSize),
-    ]);
-    const crossMat = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 });
-    axisGroup.add(new THREE.Line(crossGeo1, crossMat));
-    axisGroup.add(new THREE.Line(crossGeo2, crossMat));
-    axisGroup.add(new THREE.Line(crossGeo3, crossMat));
     
     sceneRef.current.add(axisGroup);
     axisGroupRef.current = axisGroup;
@@ -312,7 +288,6 @@ export function Viewport({
           const material = new THREE.LineBasicMaterial({ color: 0x00ff88, linewidth: 2 });
           overlayGroup.add(new THREE.Line(geometry, material));
         }
-        // Draw control points
         for (const p of points3D) {
           const sphereGeo = new THREE.SphereGeometry(Math.max(0.3, (preview?.bounds[0] || 10) * 0.01), 8, 8);
           const sphereMat = new THREE.MeshBasicMaterial({ color: 0x00ff88 });
@@ -327,7 +302,7 @@ export function Viewport({
     overlayGroupRef.current = overlayGroup;
   }, [run.sketches, run.sketchPlanes, activeSketchId, preview, run.orientation]);
 
-  // Initialize Three.js
+  // Initialize Three.js with OrbitControls
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
@@ -335,10 +310,20 @@ export function Viewport({
     scene.background = new THREE.Color(0x171b1f);
 
     const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 10000);
+    camera.position.set(60, 45, 60);
+
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
     container.appendChild(renderer.domElement);
+
+    // Add OrbitControls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.rotateSpeed = 0.8;
+    controls.zoomSpeed = 1.2;
+    controls.panSpeed = 0.8;
 
     scene.add(new THREE.AmbientLight(0x404050, 0.6));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -351,14 +336,11 @@ export function Viewport({
     sceneRef.current = scene;
     cameraRef.current = camera;
     rendererRef.current = renderer;
+    controlsRef.current = controls;
 
     const animate = () => {
       animFrameRef.current = requestAnimationFrame(animate);
-      const distance = 100 / zoomRef.current;
-      camera.position.x = distance * Math.cos(pitchRef.current) * Math.sin(yawRef.current);
-      camera.position.y = distance * Math.sin(pitchRef.current);
-      camera.position.z = distance * Math.cos(pitchRef.current) * Math.cos(yawRef.current);
-      camera.lookAt(0, 0, 0);
+      controls.update();
       renderer.render(scene, camera);
     };
     animate();
@@ -374,6 +356,7 @@ export function Viewport({
     return () => {
       cancelAnimationFrame(animFrameRef.current);
       resizeObserver.disconnect();
+      controls.dispose();
       renderer.dispose();
       if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
     };
@@ -383,12 +366,29 @@ export function Viewport({
   useEffect(() => { buildSketchOverlay(); }, [buildSketchOverlay]);
 
   useEffect(() => {
+    if (!controlsRef.current || !cameraRef.current) return;
+    const controls = controlsRef.current;
+    const camera = cameraRef.current;
+    
     switch (cameraView) {
-      case 'iso': yawRef.current = -0.65; pitchRef.current = 0.45; break;
-      case 'front': yawRef.current = 0; pitchRef.current = Math.PI / 2 - 0.02; break;
-      case 'top': yawRef.current = 0; pitchRef.current = 1.5; break;
-      case 'right': yawRef.current = Math.PI / 2; pitchRef.current = 0; break;
+      case 'iso':
+        camera.position.set(60, 45, 60);
+        controls.target.set(0, 0, 0);
+        break;
+      case 'front':
+        camera.position.set(0, 0, 100);
+        controls.target.set(0, 0, 0);
+        break;
+      case 'top':
+        camera.position.set(0, 100, 0);
+        controls.target.set(0, 0, 0);
+        break;
+      case 'right':
+        camera.position.set(100, 0, 0);
+        controls.target.set(0, 0, 0);
+        break;
     }
+    controls.update();
   }, [cameraView]);
 
   // Get 3D point from mouse click via raycasting
@@ -402,24 +402,15 @@ export function Viewport({
     if (intersects.length === 0) return null;
     const point = intersects[0].point;
     
-    // The mesh is in a group with rotation, scale, and translation applied
-    // We need to get the world position relative to the group's parent (scene)
-    // Since the group has the transform, we need to inverse it
+    // Transform point back to original STL coordinates
     const orientation = run.orientation;
     const scale = orientation.scale;
     const rotRad = orientation.rotation.map(v => v * Math.PI / 180) as [number, number, number];
     const center = new THREE.Vector3(...(preview?.center || [0, 0, 0]));
     
-    // Start with the intersection point in world space
     const p = point.clone();
-    
-    // Undo the translation (center was subtracted and scaled)
     p.add(center.clone().multiplyScalar(scale));
-    
-    // Undo the scale
     p.divideScalar(scale);
-    
-    // Undo the rotation (apply in reverse order)
     p.applyAxisAngle(new THREE.Vector3(1, 0, 0), -rotRad[0]);
     p.applyAxisAngle(new THREE.Vector3(0, 1, 0), -rotRad[1]);
     p.applyAxisAngle(new THREE.Vector3(0, 0, 1), -rotRad[2]);
@@ -441,10 +432,9 @@ export function Viewport({
     if (!plane) return;
 
     // Check if point is close enough to the sketch plane
-    // Use a more lenient tolerance - 10% of the largest dimension
     const dist = distanceToPlane(plane, point3D);
     const maxDim = Math.max(preview?.bounds[0] || 10, preview?.bounds[1] || 10, preview?.bounds[2] || 10);
-    const tolerance = maxDim * 0.1; // 10% tolerance
+    const tolerance = maxDim * 0.15; // 15% tolerance
     if (dist > tolerance) {
       console.log('Point too far from plane:', dist, 'tolerance:', tolerance);
       return;
@@ -481,43 +471,53 @@ export function Viewport({
     buildSketchOverlay();
   }, [drawTool, activeSketchId, run.sketches, run.sketchPlanes, getClickPoint3D, onAddSketchElement, preview, buildSketchOverlay]);
 
-  // Finish polyline/spline on double-click or Enter
-  const handleDoubleClick = useCallback(() => {
-    if (drawTool === 'polyline' && drawPointsRef.current.length >= 2) {
-      onAddSketchElement({
-        id: crypto.randomUUID(),
-        type: 'polyline',
-        points: [...drawPointsRef.current],
-        closed: false,
-      });
-      drawPointsRef.current = [];
-      buildSketchOverlay();
-    } else if (drawTool === 'spline' && drawPointsRef.current.length >= 2) {
-      onAddSketchElement({
-        id: crypto.randomUUID(),
-        type: 'spline',
-        points: [...drawPointsRef.current],
-      });
-      drawPointsRef.current = [];
-      buildSketchOverlay();
-    }
-  }, [drawTool, onAddSketchElement, buildSketchOverlay]);
+  // Handle face selection
+  const handleFaceSelect = useCallback((e: React.PointerEvent) => {
+    if (drawTool !== 'select' || !onSelectFace || !preview?.flatRegions) return;
+    
+    const point3D = getClickPoint3D(e);
+    if (!point3D) return;
 
-  // Keyboard handler for finishing polylines and undo
+    // Find which flat region this point belongs to
+    const point = new THREE.Vector3(...point3D);
+    let closestRegion = -1;
+    let minDist = Infinity;
+
+    preview.flatRegions.forEach((region, idx) => {
+      const regionCenter = new THREE.Vector3(...region.center);
+      const dist = point.distanceTo(regionCenter);
+      if (dist < minDist) {
+        minDist = dist;
+        closestRegion = idx;
+      }
+    });
+
+    if (closestRegion >= 0) {
+      onSelectFace(closestRegion);
+    }
+  }, [drawTool, onSelectFace, preview, getClickPoint3D]);
+
+  // Combined click handler
+  const handleClick = useCallback((e: React.PointerEvent) => {
+    if (drawTool === 'select') {
+      handleFaceSelect(e);
+    } else {
+      handleViewportClick(e);
+    }
+  }, [drawTool, handleFaceSelect, handleViewportClick]);
+
+  // Keyboard handler
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // Undo last point with Backspace or Ctrl+Z
       if ((e.key === 'Backspace' || (e.ctrlKey && e.key === 'z')) && drawPointsRef.current.length > 0) {
         e.preventDefault();
         drawPointsRef.current.pop();
-        console.log('Undo point, remaining:', drawPointsRef.current.length);
         buildSketchOverlay();
         return;
       }
       
       if (e.key === 'Enter' || e.key === 'Escape') {
         if (e.key === 'Escape') {
-          // Cancel drawing
           drawPointsRef.current = [];
           buildSketchOverlay();
           return;
@@ -547,30 +547,6 @@ export function Viewport({
     return () => window.removeEventListener('keydown', handler);
   }, [drawTool, onAddSketchElement, buildSketchOverlay]);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (drawTool === 'select' || drawTool === 'pan' || drawTool === 'line' || drawTool === 'polyline' || drawTool === 'circle3p' || drawTool === 'arc3p' || drawTool === 'spline') {
-      if (drawTool !== 'select' && drawTool !== 'pan') {
-        handleViewportClick(e);
-        return;
-      }
-    }
-    dragRef.current = { x: e.clientX, y: e.clientY, yaw: yawRef.current, pitch: pitchRef.current };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, [drawTool, handleViewportClick]);
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    yawRef.current = dragRef.current.yaw + (e.clientX - dragRef.current.x) * 0.009;
-    pitchRef.current = Math.max(-1.5, Math.min(1.5, dragRef.current.pitch + (e.clientY - dragRef.current.y) * 0.009));
-  }, []);
-
-  const handlePointerUp = useCallback(() => { dragRef.current = null; }, []);
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    zoomRef.current = Math.max(0.3, Math.min(3, zoomRef.current * (e.deltaY > 0 ? 0.9 : 1.1)));
-  }, []);
-
   const hasMesh = preview && preview.preview.length > 0;
   const unitLabel = run.orientation.units === 'unknown' ? 'src units' : run.orientation.units;
   const isDrawing = drawTool !== 'select' && drawTool !== 'pan';
@@ -591,7 +567,7 @@ export function Viewport({
               {view.charAt(0).toUpperCase() + view.slice(1)}
             </button>
           ))}
-          <button type="button" onClick={() => { zoomRef.current = 1; }}
+          <button type="button" onClick={() => { if (controlsRef.current) controlsRef.current.reset(); }}
             className="px-2 py-1 border border-[#42494f] rounded-sm text-[#aeb8bd] bg-[#292f34] text-[10px] cursor-pointer hover:text-white hover:border-[#68737b]">
             Fit
           </button>
@@ -599,18 +575,13 @@ export function Viewport({
       </div>
 
       <div ref={containerRef}
-        className={`relative flex-1 min-h-0 overflow-hidden ${isDrawing ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+        className={`relative flex-1 min-h-0 overflow-hidden ${isDrawing ? 'cursor-crosshair' : 'cursor-default'}`}
         style={{
           backgroundColor: '#171b1f',
           backgroundImage: 'linear-gradient(#252b3040 1px, transparent 1px), linear-gradient(90deg, #252b3040 1px, transparent 1px)',
           backgroundSize: '28px 28px',
         }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
-        onWheel={handleWheel}>
+        onPointerDown={handleClick}>
 
         {!hasMesh && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 text-[#b4bdc2] pointer-events-none">
