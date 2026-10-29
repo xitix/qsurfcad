@@ -1,28 +1,5 @@
-export interface WorkflowDefinition {
-  id: string;
-  label: string;
-  inputExtension: string;
-  exportExtensions: string[];
-  exportLabel: string;
-  reviewChecks: [string, string][];
-  validationChecks: [string, string][];
-  cadTitle: string;
-  cadDescription: string;
-  toleranceLabel: string;
-  toleranceHelp: string;
-  validationHelp: string;
-  exportDescription: string;
-}
-
-export interface Orientation {
-  rotation: [number, number, number];
-  scale: number;
-  units: string;
-}
-
 export interface MeshPreview {
   format: string;
-  encoding?: string;
   vertices: number;
   triangles: number;
   bounds: [number, number, number];
@@ -52,34 +29,53 @@ export interface CurvatureTrace {
   angle: number;
 }
 
+export interface ModificationNote {
+  id: string;
+  type: 'dimension' | 'grip' | 'fixture' | 'insert' | 'cutout' | 'fillet' | 'other';
+  description: string;
+  location?: [number, number, number];
+  priority: 'high' | 'medium' | 'low';
+  done: boolean;
+}
+
+export interface Orientation {
+  rotation: [number, number, number];
+  scale: number;
+  units: string;
+}
+
 export interface RunManifest {
   id: string;
-  workflow: string;
   createdAt: string;
-  input: { name: string; path: string } | null;
+  projectName: string;
+  input: { name: string; path: string; size: number } | null;
   export: {
     name: string;
     path: string;
-    generated?: boolean;
-    conversion?: string;
+    generated: boolean;
     triangles?: number;
     solids?: number;
     boundsMm?: number[];
-    traceCount?: number;
   } | null;
   orientation: Orientation;
   orientationConfirmed: boolean;
-  orientationNotes: string;
-  orientationComplete: boolean;
+  modifications: ModificationNote[];
   reviewNotes: string;
-  reviewChecks: string[];
   reviewComplete: boolean;
-  validationNotes: string;
-  validationChecks: string[];
+  targetCadTool: string;
   validated: boolean;
-  exportFormatValid: boolean;
+  validationNotes: string;
 }
 
 export type Stage = 0 | 1 | 2 | 3;
+export type CameraView = 'iso' | 'front' | 'top' | 'right';
 
-export type CameraView = 'iso' | 'front' | 'top' | 'right' | 'face';
+export interface CadTool {
+  id: string;
+  name: string;
+  description: string;
+  platform: string;
+  icon: string;
+  bestFor: string[];
+  available: boolean;
+}
