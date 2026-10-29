@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { MeshPreview, RunManifest, Stage, CameraView, DrawTool, SketchElement, SketchPlane, Point2D } from '../types';
 import { FLAT_FACE_COLORS } from '../cadTools';
 import { projectToPlane, unprojectFromPlane, distanceToPlane, sampleElement } from '../utils/sketchGeometry';
+import { findSnapPoint, calculateSnapRadius, SnapPoint } from '../utils/snapDetector';
 
 interface ViewportProps {
   preview: MeshPreview | null;
@@ -36,6 +37,8 @@ export function Viewport({
   const raycasterRef = useRef(new THREE.Raycaster());
   const mouseRef = useRef(new THREE.Vector2());
   const [hoveredPoint, setHoveredPoint] = useState<THREE.Vector3 | null>(null);
+  const [snapIndicator, setSnapIndicator] = useState<SnapPoint | null>(null);
+  const snapIndicatorRef = useRef<THREE.Mesh | null>(null);
 
   const buildScene = useCallback(() => {
     if (!sceneRef.current || !preview) return;
@@ -418,10 +421,10 @@ export function Viewport({
     return [p.x, p.y, p.z];
   }, [run.orientation, preview]);
 
-  // Handle drawing clicks
+  // Handle drawing clicks with magnetic snapping
   const handleViewportClick = useCallback((e: React.PointerEvent) => {
     if (drawTool === 'select' || drawTool === 'pan') return;
-    if (!activeSketchId) return;
+    if (!activeSketchId || !preview) return;
 
     const point3D = getClickPoint3D(e);
     if (!point3D) return;
@@ -433,14 +436,30 @@ export function Viewport({
 
     // Check if point is close enough to the sketch plane
     const dist = distanceToPlane(plane, point3D);
-    const maxDim = Math.max(preview?.bounds[0] || 10, preview?.bounds[1] || 10, preview?.bounds[2] || 10);
+    const maxDim = Math.max(preview.bounds[0], preview.bounds[1], preview.bounds[2]);
     const tolerance = maxDim * 0.15; // 15% tolerance
     if (dist > tolerance) {
       console.log('Point too far from plane:', dist, 'tolerance:', tolerance);
       return;
     }
 
-    const point2D = projectToPlane(plane, point3D);
+    // Apply magnetic snapping
+    const clickPoint = new THREE.Vector3(point3D[0], point3D[1], point3D[2]);
+    const snapRadius = calculateSnapRadius(preview, 0.02); // 2% of max dimension
+    const snapResult = findSnapPoint(clickPoint, preview, snapRadius);
+    
+    let finalPoint3D: [number, number, number];
+    if (snapResult.snapped && snapResult.snapPoint) {
+      // Use snapped position
+      finalPoint3D = [snapResult.point.x, snapResult.point.y, snapResult.point.z];
+      console.log(`Snapped to ${snapResult.snapPoint.type}:`, finalPoint3D);
+    } else {
+      // Use original click position
+      finalPoint3D = point3D;
+      console.log('No snap, using click position:', point3D);
+    }
+
+    const point2D = projectToPlane(plane, finalPoint3D);
     drawPointsRef.current.push(point2D);
     console.log('Added point:', point2D, 'total points:', drawPointsRef.current.length);
 
@@ -470,6 +489,30 @@ export function Viewport({
 
     buildSketchOverlay();
   }, [drawTool, activeSketchId, run.sketches, run.sketchPlanes, getClickPoint3D, onAddSketchElement, preview, buildSketchOverlay]);
+
+  // Handle mouse move for snap indicator
+  const handleMouseMove = useCallback((e: React.PointerEvent) => {
+    if (drawTool === 'select' || drawTool === 'pan' || !preview || !activeSketchId) {
+      setSnapIndicator(null);
+      return;
+    }
+
+    const point3D = getClickPoint3D(e);
+    if (!point3D) {
+      setSnapIndicator(null);
+      return;
+    }
+
+    const clickPoint = new THREE.Vector3(point3D[0], point3D[1], point3D[2]);
+    const snapRadius = calculateSnapRadius(preview, 0.02);
+    const snapResult = findSnapPoint(clickPoint, preview, snapRadius);
+    
+    if (snapResult.snapped && snapResult.snapPoint) {
+      setSnapIndicator(snapResult.snapPoint);
+    } else {
+      setSnapIndicator(null);
+    }
+  }, [drawTool, preview, activeSketchId, getClickPoint3D]);
 
   // Handle face selection
   const handleFaceSelect = useCallback((e: React.PointerEvent) => {
@@ -581,7 +624,8 @@ export function Viewport({
           backgroundImage: 'linear-gradient(#252b3040 1px, transparent 1px), linear-gradient(90deg, #252b3040 1px, transparent 1px)',
           backgroundSize: '28px 28px',
         }}
-        onPointerDown={handleClick}>
+        onPointerDown={handleClick}
+        onPointerMove={handleMouseMove}>
 
         {!hasMesh && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 text-[#b4bdc2] pointer-events-none">
@@ -604,6 +648,11 @@ export function Viewport({
             {drawPointsRef.current.length > 0 && (
               <div className="text-[#ffaa44] text-[9px] mt-1">
                 Backspace/Ctrl+Z to undo last point
+              </div>
+            )}
+            {snapIndicator && (
+              <div className="text-[#ffdd44] text-[9px] mt-1 border-t border-[#00ff8844] pt-1">
+                ⚡ Snapped to {snapIndicator.type}
               </div>
             )}
           </div>
