@@ -6,7 +6,8 @@ import { WorkflowRail } from './components/WorkflowRail';
 import { Viewport } from './components/Viewport';
 import { Inspector } from './components/Inspector';
 import { StatusBar } from './components/StatusBar';
-import { generateDemoMesh } from './utils/meshGenerator';
+import { parseSTL } from './utils/stlParser';
+import { parsePLY } from './utils/plyParser';
 
 function createInitialRun(workflowId: string): RunManifest {
   return {
@@ -83,27 +84,45 @@ export default function App() {
     setMessage('');
   }, []);
 
-  const handleImportMesh = useCallback((file: File) => {
-    const demoMesh = generateDemoMesh(file.name, workflowId);
-    setPreview(demoMesh.preview);
-    setRun(prev => ({
-      ...prev,
-      input: { name: file.name, path: `source${workflow.inputExtension}` },
-      orientation: { rotation: [0, 0, 0], scale: 1.0, units: 'unknown' },
-      orientationConfirmed: false,
-      orientationComplete: false,
-      reviewComplete: false,
-      reviewChecks: [],
-      reviewNotes: '',
-      export: null,
-      exportFormatValid: false,
-      validated: false,
-      validationChecks: [],
-      validationNotes: '',
-    }));
-    setStage(0);
-    setFlatFaceIndex(0);
-    setMessage('');
+  const handleImportMesh = useCallback(async (file: File) => {
+    try {
+      const buffer = await file.arrayBuffer();
+      const ext = file.name.toLowerCase().split('.').pop();
+      
+      let meshPreview: MeshPreview;
+      
+      if (ext === 'stl') {
+        meshPreview = parseSTL(buffer, file.name);
+      } else if (ext === 'ply') {
+        meshPreview = parsePLY(buffer, file.name);
+      } else {
+        throw new Error(`Unsupported file format: .${ext}`);
+      }
+      
+      setPreview(meshPreview);
+      setRun(prev => ({
+        ...prev,
+        input: { name: file.name, path: `source${workflow.inputExtension}` },
+        orientation: { rotation: [0, 0, 0], scale: 1.0, units: 'unknown' },
+        orientationConfirmed: false,
+        orientationComplete: false,
+        reviewComplete: false,
+        reviewChecks: [],
+        reviewNotes: '',
+        export: null,
+        exportFormatValid: false,
+        validated: false,
+        validationChecks: [],
+        validationNotes: '',
+      }));
+      setStage(0);
+      setFlatFaceIndex(0);
+      setMessage('');
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to parse mesh file';
+      setMessage(errorMsg);
+      console.error('Mesh import error:', error);
+    }
   }, [workflowId, workflow.inputExtension]);
 
   const handleConfirmOrientation = useCallback((rotation: [number, number, number], scale: number, units: string) => {

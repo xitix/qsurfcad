@@ -12,7 +12,7 @@ interface InspectorProps {
   workflowId: string;
   flatFaceIndex: number;
   onFlatFaceIndexChange: (index: number) => void;
-  onImportMesh: (file: File) => void;
+  onImportMesh: (file: File) => void | Promise<void>;
   onConfirmOrientation: (rotation: [number, number, number], scale: number, units: string) => void;
   onSetOrientation: (rotation: [number, number, number]) => void;
   onSetUnits: (units: string) => void;
