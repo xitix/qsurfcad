@@ -21,7 +21,7 @@ interface InspectorProps {
   onDeleteSketchElement: (elementId: string) => void;
   onConfirmSketches: (notes: string) => void;
   onSkipSketch: () => void;
-  onExportProject: (format: 'step' | 'iges' | 'dxf' | 'json') => void;
+  onExportProject: (format: 'step' | 'iges' | 'dxf' | 'stl' | 'json') => void;
   onSetCadTool: (toolId: string) => void;
   onValidate: (notes: string) => void;
   onSetStage: (stage: Stage) => void;
@@ -402,19 +402,23 @@ export function Inspector(props: InspectorProps) {
           </div>
 
           <div className="grid gap-2 mt-3">
-            <button type="button" onClick={() => onExportProject('json')}
-              className="w-full min-h-[30px] py-2 px-2.5 border border-[#3982ee] rounded-sm text-white bg-[#286fda] text-[10px] font-semibold cursor-pointer hover:bg-[#3986fa]">
-              Export as JSON (SolidCraft / generic)
-            </button>
             <button type="button" onClick={() => onExportProject('dxf')}
-              className="w-full min-h-[30px] py-2 px-2.5 border border-[#4a535b] rounded-sm text-[#cad2d7] bg-[#30363c] text-[10px] font-semibold cursor-pointer hover:bg-[#3a4248]">
-              Export as DXF (FreeCAD / MOI3D)
+              className="w-full min-h-[30px] py-2 px-2.5 border border-[#3982ee] rounded-sm text-white bg-[#286fda] text-[10px] font-semibold cursor-pointer hover:bg-[#3986fa]">
+              Export sketches as DXF (FreeCAD / SolidCraft / MOI3D)
             </button>
-            <button type="button" onClick={() => onExportProject('iges')}
+            <button type="button" onClick={() => onExportProject('stl')}
               className="w-full min-h-[30px] py-2 px-2.5 border border-[#4a535b] rounded-sm text-[#cad2d7] bg-[#30363c] text-[10px] font-semibold cursor-pointer hover:bg-[#3a4248]">
-              Export as IGES splines (MOI3D)
+              Export oriented mesh as STL
+            </button>
+            <button type="button" onClick={() => onExportProject('json')}
+              className="w-full min-h-[30px] py-2 px-2.5 border border-[#4a535b] rounded-sm text-[#cad2d7] bg-[#30363c] text-[10px] font-semibold cursor-pointer hover:bg-[#3a4248]">
+              Export project data as JSON (backup)
             </button>
           </div>
+          <p className="my-2 pl-2 border-l-2 border-[#e5b45b] text-[#c6b184] bg-[#332e24] text-[9px] leading-[1.5] py-2">
+            <strong>Workflow:</strong> Export DXF → Import into CAD → Reconstruct parametric solids from sketches.
+            The DXF contains your traced sketches as 2D/3D curves ready for extrusion, revolution, or other CAD operations.
+          </p>
 
           {run.export && (
             <div className="mt-3 p-2 border border-[#356c4a] bg-[#20352a] text-[#9cddb2] text-[10px] leading-[1.5]">

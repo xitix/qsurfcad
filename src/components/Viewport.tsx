@@ -39,6 +39,7 @@ export function Viewport({
   const [hoveredPoint, setHoveredPoint] = useState<THREE.Vector3 | null>(null);
   const [snapIndicator, setSnapIndicator] = useState<SnapPoint | null>(null);
   const snapIndicatorRef = useRef<THREE.Mesh | null>(null);
+  const snapRadiusIndicatorRef = useRef<THREE.Mesh | null>(null);
 
   const buildScene = useCallback(() => {
     if (!sceneRef.current || !preview) return;
@@ -123,7 +124,7 @@ export function Viewport({
       group.add(mesh);
       meshRef.current = mesh;
 
-      // Boundary edges overlay
+      // Boundary edges overlay - enhanced visibility
       if (preview.boundaryEdges && preview.boundaryEdges.length > 0) {
         const edgeVertices: number[] = [];
         preview.boundaryEdges.forEach(edge => {
@@ -132,9 +133,50 @@ export function Viewport({
         });
         const edgeGeo = new THREE.BufferGeometry();
         edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute(edgeVertices, 3));
-        const edgeMat = new THREE.LineBasicMaterial({ color: 0xffaa00, linewidth: 1, transparent: true, opacity: 0.8 });
+        
+        // Bright orange edges with higher opacity
+        const edgeMat = new THREE.LineBasicMaterial({ 
+          color: 0xff8800, 
+          linewidth: 2, 
+          transparent: true, 
+          opacity: 0.95 
+        });
         const edgeLines = new THREE.LineSegments(edgeGeo, edgeMat);
         group.add(edgeLines);
+        
+        // Add vertex markers at edge endpoints
+        const vertexSet = new Set<string>();
+        const vertexPositions: THREE.Vector3[] = [];
+        
+        preview.boundaryEdges.forEach(edge => {
+          const keyA = `${edge.a[0].toFixed(6)},${edge.a[1].toFixed(6)},${edge.a[2].toFixed(6)}`;
+          const keyB = `${edge.b[0].toFixed(6)},${edge.b[1].toFixed(6)},${edge.b[2].toFixed(6)}`;
+          
+          if (!vertexSet.has(keyA)) {
+            vertexSet.add(keyA);
+            vertexPositions.push(new THREE.Vector3(edge.a[0], edge.a[1], edge.a[2]));
+          }
+          if (!vertexSet.has(keyB)) {
+            vertexSet.add(keyB);
+            vertexPositions.push(new THREE.Vector3(edge.b[0], edge.b[1], edge.b[2]));
+          }
+        });
+        
+        // Add small spheres at vertices
+        const maxDim = Math.max(preview.bounds[0], preview.bounds[1], preview.bounds[2]);
+        const vertexRadius = maxDim * 0.008;
+        
+        vertexPositions.forEach(pos => {
+          const sphereGeo = new THREE.SphereGeometry(vertexRadius, 8, 8);
+          const sphereMat = new THREE.MeshBasicMaterial({ 
+            color: 0xffcc00, 
+            transparent: true, 
+            opacity: 0.9 
+          });
+          const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+          sphere.position.copy(pos);
+          group.add(sphere);
+        });
       }
     }
 
@@ -406,17 +448,22 @@ export function Viewport({
     const point = intersects[0].point;
     
     // Transform point back to original STL coordinates
+    // Mesh transform: rotate -> scale -> translate(-center * scale)
+    // Reverse: translate(+center * scale) -> unscale -> unrotate (ZYX order)
     const orientation = run.orientation;
     const scale = orientation.scale;
     const rotRad = orientation.rotation.map(v => v * Math.PI / 180) as [number, number, number];
     const center = new THREE.Vector3(...(preview?.center || [0, 0, 0]));
     
     const p = point.clone();
+    // 1. Undo translation
     p.add(center.clone().multiplyScalar(scale));
+    // 2. Undo scale
     p.divideScalar(scale);
-    p.applyAxisAngle(new THREE.Vector3(1, 0, 0), -rotRad[0]);
-    p.applyAxisAngle(new THREE.Vector3(0, 1, 0), -rotRad[1]);
+    // 3. Undo rotation (reverse order: Z, Y, X)
     p.applyAxisAngle(new THREE.Vector3(0, 0, 1), -rotRad[2]);
+    p.applyAxisAngle(new THREE.Vector3(0, 1, 0), -rotRad[1]);
+    p.applyAxisAngle(new THREE.Vector3(1, 0, 0), -rotRad[0]);
     
     return [p.x, p.y, p.z];
   }, [run.orientation, preview]);
@@ -494,12 +541,21 @@ export function Viewport({
   const handleMouseMove = useCallback((e: React.PointerEvent) => {
     if (drawTool === 'select' || drawTool === 'pan' || !preview || !activeSketchId) {
       setSnapIndicator(null);
+      // Remove snap radius indicator
+      if (snapRadiusIndicatorRef.current && sceneRef.current) {
+        sceneRef.current.remove(snapRadiusIndicatorRef.current);
+        snapRadiusIndicatorRef.current = null;
+      }
       return;
     }
 
     const point3D = getClickPoint3D(e);
     if (!point3D) {
       setSnapIndicator(null);
+      if (snapRadiusIndicatorRef.current && sceneRef.current) {
+        sceneRef.current.remove(snapRadiusIndicatorRef.current);
+        snapRadiusIndicatorRef.current = null;
+      }
       return;
     }
 
@@ -511,6 +567,27 @@ export function Viewport({
       setSnapIndicator(snapResult.snapPoint);
     } else {
       setSnapIndicator(null);
+    }
+    
+    // Show snap radius indicator
+    if (sceneRef.current) {
+      // Remove old indicator
+      if (snapRadiusIndicatorRef.current) {
+        sceneRef.current.remove(snapRadiusIndicatorRef.current);
+      }
+      
+      // Create new indicator
+      const sphereGeo = new THREE.SphereGeometry(snapRadius, 16, 16);
+      const sphereMat = new THREE.MeshBasicMaterial({ 
+        color: snapResult.snapped ? 0x00ff88 : 0xffaa00,
+        transparent: true, 
+        opacity: 0.15,
+        wireframe: true
+      });
+      const sphere = new THREE.Mesh(sphereGeo, sphereMat);
+      sphere.position.copy(clickPoint);
+      sceneRef.current.add(sphere);
+      snapRadiusIndicatorRef.current = sphere;
     }
   }, [drawTool, preview, activeSketchId, getClickPoint3D]);
 

@@ -9,6 +9,8 @@ import { StatusBar } from './components/StatusBar';
 import { parseSTL } from './utils/stlParser';
 import { detectBoundaryEdges } from './utils/edgeDetector';
 import { createSketchPlane } from './utils/sketchGeometry';
+import { downloadDXF } from './utils/dxfExport';
+import { downloadSTL } from './utils/stlExport';
 
 function createInitialRun(): RunManifest {
   return {
@@ -206,41 +208,52 @@ export default function App() {
     setMessage('');
   }, []);
 
-  const handleExportProject = useCallback((format: 'step' | 'iges' | 'dxf' | 'json') => {
+  const handleExportProject = useCallback((format: 'step' | 'iges' | 'dxf' | 'stl' | 'json') => {
     const sourceName = run.input?.name || 'mesh.stl';
     const stem = sourceName.replace(/\.stl$/i, '');
-    const ext = format === 'step' ? 'step' : format === 'iges' ? 'igs' : format === 'dxf' ? 'dxf' : 'json';
 
-    // Generate export data
-    const exportData = {
-      projectName: run.projectName,
-      orientation: run.orientation,
-      sketchPlanes: run.sketchPlanes,
-      sketches: run.sketches,
-      identifiedPrimitives: run.identifiedPrimitives,
-      modifications: run.modifications,
-    };
+    if (format === 'dxf') {
+      // Export sketches as DXF
+      downloadDXF(run.sketches, run.sketchPlanes, `${stem}_sketches.dxf`, run.orientation.units);
+      setMessage('Sketches exported as DXF. Import into your CAD tool.');
+    } else if (format === 'stl') {
+      // Export oriented mesh as STL
+      if (preview) {
+        downloadSTL(preview, run.orientation, `${stem}_oriented.stl`);
+        setMessage('Oriented mesh exported as STL.');
+      }
+    } else {
+      // Export project data as JSON (for backup/transfer)
+      const ext = format === 'step' ? 'step' : format === 'iges' ? 'igs' : 'json';
+      const exportData = {
+        projectName: run.projectName,
+        orientation: run.orientation,
+        sketchPlanes: run.sketchPlanes,
+        sketches: run.sketches,
+        identifiedPrimitives: run.identifiedPrimitives,
+        modifications: run.modifications,
+      };
 
-    // Create download
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${stem}_project.${ext === 'json' ? 'json' : 'json'}`;
-    a.click();
-    URL.revokeObjectURL(url);
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${stem}_project.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setMessage(`Project data exported as JSON.`);
+    }
 
     setRun(prev => ({
       ...prev,
       export: {
-        name: `${stem}_project.${ext}`,
-        path: `${stem}_project.${ext}`,
+        name: `${stem}_export.${format === 'dxf' ? 'dxf' : format === 'stl' ? 'stl' : 'json'}`,
+        path: `${stem}_export.${format === 'dxf' ? 'dxf' : format === 'stl' ? 'stl' : 'json'}`,
         generated: true,
-        format,
+        format: format as any,
       },
     }));
-    setMessage(`Project exported as ${format.toUpperCase()}. Import into your CAD tool.`);
-  }, [run]);
+  }, [run, preview]);
 
   const handleSetCadTool = useCallback((toolId: string) => {
     setRun(prev => ({
