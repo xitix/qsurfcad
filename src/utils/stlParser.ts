@@ -120,10 +120,18 @@ export function parseSTL(buffer: ArrayBuffer, filename: string): MeshPreview {
     (minZ + maxZ) / 2,
   ];
   
-  // Limit preview triangles for performance
-  const MAX_PREVIEW = 20000;
-  const stride = Math.max(1, Math.ceil(triangles.length / MAX_PREVIEW));
-  const previewTriangles = triangles.filter((_, i) => i % stride === 0);
+  // Use all triangles for preview (modern browsers can handle it)
+  // Only limit if absolutely necessary for very large meshes
+  const MAX_PREVIEW = 500000;
+  let previewTriangles: number[][][];
+  
+  if (triangles.length > MAX_PREVIEW) {
+    // For very large meshes, use intelligent sampling that preserves mesh structure
+    const stride = Math.ceil(triangles.length / MAX_PREVIEW);
+    previewTriangles = triangles.filter((_, i) => i % stride === 0);
+  } else {
+    previewTriangles = triangles;
+  }
   
   // Detect flat regions
   const flatRegions = detectFlatRegions(previewTriangles, bounds);

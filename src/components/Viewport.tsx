@@ -110,7 +110,12 @@ export function Viewport({
       geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
       geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
 
-      const material = new THREE.MeshPhongMaterial({ vertexColors: true, flatShading: true, shininess: 20 });
+      const material = new THREE.MeshPhongMaterial({ 
+        vertexColors: true, 
+        flatShading: true, 
+        shininess: 20,
+        side: THREE.DoubleSide // Render both sides of faces
+      });
       const mesh = new THREE.Mesh(geometry, material);
       group.add(mesh);
       meshRef.current = mesh;
@@ -396,18 +401,29 @@ export function Viewport({
     const intersects = raycasterRef.current.intersectObject(meshRef.current, false);
     if (intersects.length === 0) return null;
     const point = intersects[0].point;
-    // Reverse the group transform
+    
+    // The mesh is in a group with rotation, scale, and translation applied
+    // We need to get the world position relative to the group's parent (scene)
+    // Since the group has the transform, we need to inverse it
     const orientation = run.orientation;
     const scale = orientation.scale;
-    const rotRad = orientation.rotation.map(v => -v * Math.PI / 180) as [number, number, number];
+    const rotRad = orientation.rotation.map(v => v * Math.PI / 180) as [number, number, number];
     const center = new THREE.Vector3(...(preview?.center || [0, 0, 0]));
+    
+    // Start with the intersection point in world space
     const p = point.clone();
+    
+    // Undo the translation (center was subtracted and scaled)
     p.add(center.clone().multiplyScalar(scale));
+    
+    // Undo the scale
     p.divideScalar(scale);
-    // Apply inverse rotation
-    p.applyAxisAngle(new THREE.Vector3(0, 0, 1), rotRad[2]);
-    p.applyAxisAngle(new THREE.Vector3(0, 1, 0), rotRad[1]);
-    p.applyAxisAngle(new THREE.Vector3(1, 0, 0), rotRad[0]);
+    
+    // Undo the rotation (apply in reverse order)
+    p.applyAxisAngle(new THREE.Vector3(1, 0, 0), -rotRad[0]);
+    p.applyAxisAngle(new THREE.Vector3(0, 1, 0), -rotRad[1]);
+    p.applyAxisAngle(new THREE.Vector3(0, 0, 1), -rotRad[2]);
+    
     return [p.x, p.y, p.z];
   }, [run.orientation, preview]);
 
@@ -425,12 +441,18 @@ export function Viewport({
     if (!plane) return;
 
     // Check if point is close enough to the sketch plane
+    // Use a more lenient tolerance - 10% of the largest dimension
     const dist = distanceToPlane(plane, point3D);
-    const tolerance = Math.max(0.5, (preview?.bounds[0] || 10) * 0.02);
-    if (dist > tolerance) return;
+    const maxDim = Math.max(preview?.bounds[0] || 10, preview?.bounds[1] || 10, preview?.bounds[2] || 10);
+    const tolerance = maxDim * 0.1; // 10% tolerance
+    if (dist > tolerance) {
+      console.log('Point too far from plane:', dist, 'tolerance:', tolerance);
+      return;
+    }
 
     const point2D = projectToPlane(plane, point3D);
     drawPointsRef.current.push(point2D);
+    console.log('Added point:', point2D, 'total points:', drawPointsRef.current.length);
 
     // Auto-complete based on tool
     if (drawTool === 'line' && drawPointsRef.current.length === 2) {
@@ -481,16 +503,32 @@ export function Viewport({
     }
   }, [drawTool, onAddSketchElement, buildSketchOverlay]);
 
-  // Keyboard handler for finishing polylines
+  // Keyboard handler for finishing polylines and undo
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // Undo last point with Backspace or Ctrl+Z
+      if ((e.key === 'Backspace' || (e.ctrlKey && e.key === 'z')) && drawPointsRef.current.length > 0) {
+        e.preventDefault();
+        drawPointsRef.current.pop();
+        console.log('Undo point, remaining:', drawPointsRef.current.length);
+        buildSketchOverlay();
+        return;
+      }
+      
       if (e.key === 'Enter' || e.key === 'Escape') {
+        if (e.key === 'Escape') {
+          // Cancel drawing
+          drawPointsRef.current = [];
+          buildSketchOverlay();
+          return;
+        }
+        
         if (drawTool === 'polyline' && drawPointsRef.current.length >= 2) {
           onAddSketchElement({
             id: crypto.randomUUID(),
             type: 'polyline',
             points: [...drawPointsRef.current],
-            closed: e.key === 'Enter',
+            closed: true,
           });
           drawPointsRef.current = [];
           buildSketchOverlay();
@@ -503,7 +541,6 @@ export function Viewport({
           drawPointsRef.current = [];
           buildSketchOverlay();
         }
-        drawPointsRef.current = [];
       }
     };
     window.addEventListener('keydown', handler);
@@ -585,8 +622,19 @@ export function Viewport({
 
         {/* Drawing mode indicator */}
         {isDrawing && activeSketchId && (
-          <div className="absolute top-3 left-3 px-2 py-1 border border-[#00ff88] rounded-sm bg-[#002211dd] text-[#00ff88] text-[10px] font-bold">
-            DRAWING: {drawTool.toUpperCase()} · {drawPointsRef.current.length} pts · {drawTool === 'polyline' || drawTool === 'spline' ? 'Double-click or Enter to finish' : `Click ${drawTool === 'line' ? '2' : '3'} points`}
+          <div className="absolute top-3 left-3 px-3 py-2 border border-[#00ff88] rounded-sm bg-[#002211ee] text-[#00ff88] text-[10px]">
+            <div className="font-bold mb-1">DRAWING: {drawTool.toUpperCase()}</div>
+            <div>Points: {drawPointsRef.current.length}</div>
+            <div className="text-[#88ddaa] text-[9px] mt-1">
+              {drawTool === 'line' && 'Click 2 points'}
+              {(drawTool === 'circle3p' || drawTool === 'arc3p') && 'Click 3 points'}
+              {(drawTool === 'polyline' || drawTool === 'spline') && 'Click points · Enter to close · Esc to cancel'}
+            </div>
+            {drawPointsRef.current.length > 0 && (
+              <div className="text-[#ffaa44] text-[9px] mt-1">
+                Backspace/Ctrl+Z to undo last point
+              </div>
+            )}
           </div>
         )}
 
