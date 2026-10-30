@@ -1,6 +1,6 @@
 # QSurfCAD - MagicTrace Workbench
 
-Aplicație web de reverse engineering care combină UI/UX inspirat din Mesh2CAD cu motorul de conversie stl2step.
+Aplicație web de reverse engineering care combină UI/UX cu motorul de conversie stl2step.
 
 > **Notă:** Nume alternativ: `qwensurfcad` (pentru consistență cu repo-ul GitHub)
 
@@ -13,13 +13,13 @@ Aplicație web de reverse engineering care combină UI/UX inspirat din Mesh2CAD 
 ```bash
 # Din folderul unde ai compilat stl2step
 cd ~/Downloads/Delete/stl2step/build
-cp stl2step /path/to/mesh2cad-workbench/backend/
+cp stl2step /path/to/qsurfcad-workbench/backend/
 ```
 
 ### 2. Instalează și pornește backend-ul
 
 ```bash
-cd /path/to/mesh2cad-workbench/backend
+cd /path/to/qsurfcad-workbench/backend
 npm install
 node server.js
 ```
@@ -27,7 +27,7 @@ node server.js
 ### 3. Pornește frontend-ul (alt terminal)
 
 ```bash
-cd /path/to/mesh2cad-workbench
+cd /path/to/qsurfcad-workbench
 npm install
 npm run dev
 ```
@@ -88,7 +88,7 @@ npm run dev
 
 ### ✅ Faza 1 (Complet)
 
-**UI Mesh2CAD-style:**
+**UI qsurfcad-style:**
 - Layout 3 coloane (Toolbox | Viewport | Context)
 - Toolbox cu categorii: PREPARE, GUIDES, BUILD CAD, EXPORT
 - Object Browser cu arbore de entități
@@ -269,7 +269,7 @@ const confidence = 1 - (avgError / snapRadius);
 
 ## 📝 Status
 
-✅ UI Mesh2CAD-style complet  
+✅ UI qsurfcad-style complet  
 ✅ MagicTrace engine funcțional  
 ✅ Snapping la vârfuri/muchii/centre  
 ✅ Least Squares Fitting (line/circle)  
@@ -292,7 +292,7 @@ MIT
 
 ## 🙏 Credits
 
-- **Mesh2CAD** - Concept UI/UX
+- **qsurfcad** - Concept UI/UX
 - **stl2step** (BlinkingSun) - Motor conversie STL → STEP
 - **reverscad** (Shugar86) - Arhitectură de referință
 - **OpenCASCADE** - Kernel CAD

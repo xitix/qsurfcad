@@ -1,0 +1,139 @@
+{
+  "schema_version": 2,
+  "input": {
+    "path": "Sample Plate.stl",
+    "format": "binary",
+    "source_triangles": 4080,
+    "source_corner_vertices": 12240,
+    "welded_vertices": 2036,
+    "weld_tolerance": 9.687104830649868e-8,
+    "dropped_facets": [],
+    "interpreted_unit": "millimeter"
+  },
+  "output": {
+    "path": "Sample Plate.step",
+    "bytes": 83084
+  },
+  "conversion": {
+    "backend": "hybrid_analytic_rebuild",
+    "backend_reason": "independent segmentation reconstructed and validated a fully analytic plane/cylinder/cone/sphere shell",
+    "fallback_cause": null,
+    "input_vertices": 2036,
+    "input_triangles": 4080,
+    "recognized_regions": 0,
+    "recognized_triangles": 0,
+    "unresolved_triangles": 0,
+    "recognition_skipped": "kernel segmentation found 15 analytic regions; a whole primitive has at most 3",
+    "source_closed_manifold": true,
+    "analytic_used_repaired_mesh": false,
+    "requested_distance_tolerance": 1e-6,
+    "coordinate_precision_tolerance": 0.000010000799742300198,
+    "effective_distance_tolerance": 0.000010000799742300198,
+    "region_type_counts": {},
+    "regions": [],
+    "topology_refit": null,
+    "hybrid_rebuild": {
+      "total_faces": 15,
+      "analytic_plane_faces": 7,
+      "analytic_plane_triangles": 672,
+      "analytic_cylinder_faces": 8,
+      "analytic_cylinder_triangles": 3408,
+      "analytic_cone_faces": 0,
+      "analytic_cone_triangles": 0,
+      "analytic_sphere_faces": 0,
+      "analytic_sphere_triangles": 0,
+      "analytic_torus_faces": 0,
+      "analytic_torus_triangles": 0,
+      "faceted_faces": 0,
+      "faceted_triangles": 0,
+      "demoted_regions": 0,
+      "demoted_triangles": 0,
+      "segmentation_plane_regions": 7,
+      "segmentation_cylinder_regions": 8,
+      "segmentation_cone_regions": 0,
+      "segmentation_sphere_regions": 0,
+      "segmentation_torus_regions": 0,
+      "segmentation_unsupported_regions": 0
+    },
+    "components": [
+      {
+        "index": 0,
+        "first_triangle": 0,
+        "input_vertices": 2036,
+        "input_triangles": 4080,
+        "backend": "hybrid_analytic_rebuild",
+        "backend_reason": "independent segmentation reconstructed and validated a fully analytic plane/cylinder/cone/sphere shell",
+        "fallback_cause": null,
+        "recognition_skipped": "kernel segmentation found 15 analytic regions; a whole primitive has at most 3",
+        "recognized_regions": 0,
+        "recognized_triangles": 0,
+        "unresolved_triangles": 0,
+        "source_closed_manifold": true,
+        "analytic_used_repaired_mesh": false,
+        "hybrid_rebuild": {
+          "total_faces": 15,
+          "analytic_plane_faces": 7,
+          "analytic_plane_triangles": 672,
+          "analytic_cylinder_faces": 8,
+          "analytic_cylinder_triangles": 3408,
+          "analytic_cone_faces": 0,
+          "analytic_cone_triangles": 0,
+          "analytic_sphere_faces": 0,
+          "analytic_sphere_triangles": 0,
+          "analytic_torus_faces": 0,
+          "analytic_torus_triangles": 0,
+          "faceted_faces": 0,
+          "faceted_triangles": 0,
+          "demoted_regions": 0,
+          "demoted_triangles": 0,
+          "segmentation_plane_regions": 7,
+          "segmentation_cylinder_regions": 8,
+          "segmentation_cone_regions": 0,
+          "segmentation_sphere_regions": 0,
+          "segmentation_torus_regions": 0,
+          "segmentation_unsupported_regions": 0
+        },
+        "faceted_faces_before_merge": null,
+        "faceted_faces_after_merge": null,
+        "faces": 15,
+        "refusal": null,
+        "source_name": null
+      }
+    ],
+    "exported_step_bytes": 83084,
+    "exported_advanced_faces": 15,
+    "faceted_faces_before_merge": null,
+    "faceted_faces_after_merge": null,
+    "roundtrip_solids": 1,
+    "manifold_audit_issues": [],
+    "timings": {
+      "segmentation_seconds": 0.008496185,
+      "recognition_seconds": 0.0,
+      "topology_build_seconds": 0.07899372,
+      "step_export_seconds": 0.004087096,
+      "step_validation_seconds": 0.332378881,
+      "total_seconds": 0.428624426
+    },
+    "recognition_work": {
+      "hypotheses": 0,
+      "rounds": 0,
+      "seeded_components": 0
+    },
+    "whole_carrier_scan": {
+      "accepted": 0,
+      "declined": 0,
+      "abstained": 0
+    },
+    "messages": [
+      "RANSAC recognition skipped: kernel segmentation found 15 analytic regions; a whole primitive has at most 3",
+      "source coordinate precision raised the absolute recognition distance from 1.000000e-6 to 1.000080e-5",
+      "STEP manifold audit and round-trip import passed for 1 solid(s)",
+      "independent segmentation reconstructed and validated a fully analytic plane/cylinder/cone/sphere shell"
+    ]
+  },
+  "cli_timings_seconds": {
+    "stl_import": 0.01836793,
+    "step_file_write": 0.010309445,
+    "total_through_step_write": 0.457418945
+  }
+}

@@ -13,13 +13,13 @@
 ls -lh ~/Downloads/Delete/stl2step/build/stl2step
 
 # Copiază în backend
-cp ~/Downloads/Delete/stl2step/build/stl2step /path/to/mesh2cad-workbench/backend/
+cp ~/Downloads/Delete/stl2step/build/stl2step /path/to/qsurfcad-workbench/backend/
 
 # Verifică că s-a copiat
-ls -lh /path/to/mesh2cad-workbench/backend/stl2step
+ls -lh /path/to/qsurfcad-workbench/backend/stl2step
 
 # Testează
-cd /path/to/mesh2cad-workbench/backend
+cd /path/to/qsurfcad-workbench/backend
 ./stl2step --version
 ```
 
@@ -31,7 +31,7 @@ stl2step 1.8.0
 ### Pasul 2: Instalează dependențe
 
 ```bash
-cd /path/to/mesh2cad-workbench/backend
+cd /path/to/qsurfcad-workbench/backend
 npm install
 ```
 
@@ -55,7 +55,7 @@ stl2step path: ./stl2step
 ### Pasul 4: Pornește frontend (alt terminal)
 
 ```bash
-cd /path/to/mesh2cad-workbench
+cd /path/to/qsurfcad-workbench
 npm run dev
 ```
 
@@ -72,7 +72,7 @@ npm run dev
 ## 🗂️ Structura finală
 
 ```
-mesh2cad-workbench/
+qsurfcad-workbench/
 ├── backend/
 │   ├── server.js              ← Express.js server
 │   ├── stl2step               ← Binarul tău (copiat aici)
@@ -96,14 +96,14 @@ mesh2cad-workbench/
 ### Opțiunea A: Symlink
 
 ```bash
-cd /path/to/mesh2cad-workbench/backend
+cd /path/to/qsurfcad-workbench/backend
 ln -s ~/Downloads/Delete/stl2step/build/stl2step stl2step
 ```
 
 ### Opțiunea B: Environment variable
 
 ```bash
-cd /path/to/mesh2cad-workbench/backend
+cd /path/to/qsurfcad-workbench/backend
 STL2STEP_PATH=~/Downloads/Delete/stl2step/build/stl2step node server.js
 ```
 
@@ -141,7 +141,7 @@ curl http://localhost:3001/api/health
 
 ```bash
 # Testează conversia direct
-cd /path/to/mesh2cad-workbench/backend
+cd /path/to/qsurfcad-workbench/backend
 curl -X POST http://localhost:3001/api/convert \
   -F "stl=@/path/to/Sample Plate.stl" \
   -F "engine=trueform" \
