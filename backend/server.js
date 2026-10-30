@@ -34,7 +34,9 @@ if (!fs.existsSync('uploads')) {
 }
 
 // Path to stl2step binary (configurable via env var)
-const STL2STEP_PATH = process.env.STL2STEP_PATH || './stl2step';
+// Priority: 1) env var, 2) local ./stl2step, 3) absolute path
+const STL2STEP_PATH = process.env.STL2STEP_PATH || 
+                      (require('fs').existsSync('./stl2step') ? './stl2step' : '/home/xitix5r/Downloads/Delete/stl2step/build/stl2step');
 
 /**
  * POST /api/convert
