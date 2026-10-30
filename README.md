@@ -2,6 +2,45 @@
 
 Aplicație web de reverse engineering care combină UI/UX Mesh2CAD cu motorul de conversie stl2step.
 
+**Status:** ✅ Funcțional - Conversie STL → STEP cu reconstrucție analitică
+
+## 🚀 Quick Start (5 minute)
+
+### 1. Copiază binarul stl2step
+
+```bash
+# Din folderul unde ai compilat stl2step
+cd ~/Downloads/Delete/stl2step/build
+cp stl2step /path/to/mesh2cad-workbench/backend/
+```
+
+### 2. Instalează și pornește backend-ul
+
+```bash
+cd /path/to/mesh2cad-workbench/backend
+npm install
+node server.js
+```
+
+### 3. Pornește frontend-ul (alt terminal)
+
+```bash
+cd /path/to/mesh2cad-workbench
+npm install
+npm run dev
+```
+
+### 4. Testează
+
+1. Deschide `http://localhost:5173`
+2. Importă un STL
+3. Click **🔄 Convert to STEP**
+4. Descarcă fișierul STEP!
+
+**Setup complet:** Vezi [backend/SETUP.md](backend/SETUP.md)
+
+---
+
 ## 🎯 Ce Este
 
 **MagicTrace** = Trasare magnetică cu snapping inteligent pe mesh STL
@@ -9,6 +48,11 @@ Aplicație web de reverse engineering care combină UI/UX Mesh2CAD cu motorul de
 - Snapping la vârfuri, muchii ascuțite, centre de fețe
 - Least Squares Fitting pentru linii/arce/cercuri perfecte
 - Feedback vizual în timp real
+
+**stl2step Integration** = Conversie STL → STEP cu reconstrucție analitică
+- Detectează plane, cilindri, conuri, sfere
+- Generează STEP cu topologie B-rep validă
+- Editabil în FreeCAD, SolidCraft, MOI3D, Onshape
 
 ## 🏗️ Arhitectură
 
