@@ -1,4 +1,4 @@
-# Mesh2CAD Workbench - Documentație Finală
+# QSurfCAD Workbench - Documentație Finală
 
 ## Status: INCOMPLET ȘI NEFUNCȚIONAL
 

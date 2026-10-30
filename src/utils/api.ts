@@ -1,5 +1,5 @@
 /**
- * API Client for Mesh2CAD Backend
+ * API Client for QSurfCAD Backend
  * Communicates with Express.js server that wraps stl2step CLI
  */
 

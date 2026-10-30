@@ -4,7 +4,7 @@
 set -e
 
 echo "╔═══════════════════════════════════════════╗"
-echo "║  Mesh2CAD Integration Test                ║"
+echo "║  QSurfCAD Integration Test                ║"
 echo "╚═══════════════════════════════════════════╝"
 echo ""
 

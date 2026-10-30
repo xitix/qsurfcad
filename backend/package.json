@@ -1,7 +1,7 @@
 {
-  "name": "mesh2cad-backend",
+  "name": "qsurfcad-backend",
   "version": "1.0.0",
-  "description": "Express.js backend for Mesh2CAD - wraps stl2step CLI",
+  "description": "Express.js backend for QSurfCAD - wraps stl2step CLI",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

@@ -29,7 +29,7 @@ export function generateSTL(
   const view = new DataView(buffer);
   
   // Header (80 bytes)
-  const header = 'Binary STL exported from Mesh2CAD Workbench';
+  const header = 'Binary STL exported from QSurfCAD Workbench';
   for (let i = 0; i < 80; i++) {
     view.setUint8(i, i < header.length ? header.charCodeAt(i) : 0);
   }

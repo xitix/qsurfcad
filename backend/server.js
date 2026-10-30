@@ -1,5 +1,5 @@
 /**
- * Mesh2CAD Backend Server
+ * QSurfCAD Backend Server
  * Express.js server that wraps stl2step CLI for STL → STEP conversion
  * 
  * Usage:
@@ -179,7 +179,7 @@ app.get('/api/health', (req, res) => {
 // Start server
 app.listen(PORT, () => {
   console.log(`\n╔═══════════════════════════════════════════╗`);
-  console.log(`║  Mesh2CAD Backend Server                  ║`);
+  console.log(`║  QSurfCAD Backend Server                  ║`);
   console.log(`║  http://localhost:${PORT}                    ║`);
   console.log(`╚═══════════════════════════════════════════╝\n`);
   console.log(`stl2step path: ${STL2STEP_PATH}`);

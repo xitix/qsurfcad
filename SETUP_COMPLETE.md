@@ -1,4 +1,4 @@
-# 🚀 Setup Complet - Ghid Pas cu Pas
+# 🚀 QSurfCAD - Setup Complet - Ghid Pas cu Pas
 
 ## Opțiunea A: Descarcă de pe GitHub (Cel mai simplu)
 
@@ -222,7 +222,7 @@ Dacă ceva nu funcționează:
 **Gata de lucru!** 🎉
 
 Acum ai:
-- ✅ UI Mesh2CAD-style
+- ✅ UI QSurfCAD (stil Mesh2CAD)
 - ✅ MagicTrace funcțional
 - ✅ Conversie STL → STEP cu stl2step
 - ✅ Backend Express.js

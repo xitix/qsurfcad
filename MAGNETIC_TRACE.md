@@ -1,7 +1,7 @@
 # Magnetic Trace Implementation
 
 ## Overview
-The Magnetic Trace tool is the core innovation of the Mesh2CAD application. It allows users to draw precise sketches on mesh surfaces by intelligently snapping to detected geometric features (edges, vertices, and midpoints).
+The Magnetic Trace tool is the core innovation of the QSurfCAD application. It allows users to draw precise sketches on mesh surfaces by intelligently snapping to detected geometric features (edges, vertices, and midpoints).
 
 ## Implementation Details
 

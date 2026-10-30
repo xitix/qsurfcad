@@ -4,7 +4,7 @@
 
 - ✅ stl2step compilat și funcțional (ai confirmat că merge)
 - ✅ Node.js 18+ instalat
-- ✅ Aplicatia Mesh2CAD (acest repo)
+- ✅ Aplicația QSurfCAD (acest repo)
 
 ## 🚀 Setup Rapid (5 minute)
 
@@ -39,7 +39,7 @@ node server.js
 Ar trebui să vezi:
 ```
 ╔═══════════════════════════════════════════╗
-║  Mesh2CAD Backend Server                  ║
+║  QSurfCAD Backend Server                  ║
 ║  http://localhost:3001                    ║
 ╚═══════════════════════════════════════════╝
 

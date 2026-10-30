@@ -1,4 +1,4 @@
-# Ghid Rapid: Integrare stl2step
+# QSurfCAD - Ghid Rapid: Integrare stl2step
 
 ## 📍 Unde încarc stl2step?
 
@@ -44,7 +44,7 @@ node server.js
 **Rezultat așteptat:**
 ```
 ╔═══════════════════════════════════════════╗
-║  Mesh2CAD Backend Server                  ║
+║  QSurfCAD Backend Server                  ║
 ║  http://localhost:3001                    ║
 ╚═══════════════════════════════════════════╝
 

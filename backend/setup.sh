@@ -1,8 +1,8 @@
 #!/bin/bash
-# Quick setup script for Mesh2CAD backend
+# Quick setup script for QSurfCAD backend
 
 echo "╔═══════════════════════════════════════════╗"
-echo "║  Mesh2CAD Backend Setup                   ║"
+echo "║  QSurfCAD Backend Setup                   ║"
 echo "╚═══════════════════════════════════════════╝"
 echo ""
 

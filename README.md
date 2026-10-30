@@ -1,6 +1,8 @@
-# Mesh2CAD - MagicTrace Workbench
+# QSurfCAD - MagicTrace Workbench
 
-Aplicație web de reverse engineering care combină UI/UX Mesh2CAD cu motorul de conversie stl2step.
+Aplicație web de reverse engineering care combină UI/UX inspirat din Mesh2CAD cu motorul de conversie stl2step.
+
+> **Notă:** Nume alternativ: `qwensurfcad` (pentru consistență cu repo-ul GitHub)
 
 **Status:** ✅ Funcțional - Conversie STL → STEP cu reconstrucție analitică
 
@@ -53,6 +55,8 @@ npm run dev
 - Detectează plane, cilindri, conuri, sfere
 - Generează STEP cu topologie B-rep validă
 - Editabil în FreeCAD, SolidCraft, MOI3D, Onshape
+
+**Nume alternativ:** qwensurfcad (pentru consistență cu repo-ul GitHub)
 
 ## 🏗️ Arhitectură
 
