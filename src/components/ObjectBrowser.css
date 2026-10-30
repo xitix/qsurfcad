@@ -1,0 +1,89 @@
+.object-browser {
+  flex: 1;
+  padding: 10px;
+  overflow-y: auto;
+}
+
+.object-browser h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #888;
+  margin: 0 0 10px 0;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #333;
+}
+
+.tree {
+  font-size: 12px;
+}
+
+.tree-item {
+  margin-bottom: 5px;
+}
+
+.tree-item-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.tree-item-header:hover {
+  background: #2a2a2a;
+}
+
+.tree-item-children {
+  margin-left: 20px;
+  border-left: 1px solid #333;
+  padding-left: 10px;
+}
+
+.tree-item.leaf {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.tree-item.leaf:hover {
+  background: #2a2a2a;
+}
+
+.tree-item.leaf.selected {
+  background: #2563eb;
+  color: white;
+}
+
+.tree-item .icon {
+  margin-right: 8px;
+  font-size: 14px;
+}
+
+.tree-item .label {
+  flex: 1;
+}
+
+.tree-item .badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: #059669;
+  border-radius: 10px;
+  color: white;
+  margin-left: 8px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #666;
+}
+
+.empty-state p {
+  margin: 5px 0;
+}
+
+.empty-state .hint {
+  font-size: 11px;
+  color: #555;
+}
